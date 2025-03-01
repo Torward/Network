@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from "./layout/Header";
 import Sidebar from "./layout/Sidebar";
 import FeedContainer from "./feed/FeedContainer";
@@ -89,6 +90,8 @@ const Home = ({
     badgeColor: "bg-yellow-500",
   };
 
+  const navigate = useNavigate();
+
   const handleNavigate = (path: string) => {
     // In a real app, this would use router navigation
     console.log(`Navigating to: ${path}`);
@@ -98,12 +101,16 @@ const Home = ({
       "/": "home",
       "/profile": "profile",
       "/friends": "friends",
+      "/groups": "groups",
       "/achievements": "achievements",
       "/messages": "messages",
       "/ar": "ar",
       "/settings": "settings",
       "/help": "help",
       "/logout": "logout",
+      "/code-editor": "code-editor",
+      "/text-editor": "text-editor",
+      "/graphic-editor": "graphic-editor",
     };
 
     setActiveLink(linkMap[path] || "home");
@@ -112,6 +119,9 @@ const Home = ({
     if (path === "/ar") {
       setArViewVisible(true);
     }
+
+    // Navigate to the path
+    navigate(path);
   };
 
   const handleMenuToggle = () => {
@@ -144,45 +154,22 @@ const Home = ({
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      <Header
-        userName={userName}
-        userAvatar={userAvatar}
-        notificationCount={notificationCount}
-        onMenuToggle={handleMenuToggle}
-        onSearchSubmit={handleSearchSubmit}
-      />
-
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar - conditionally shown on mobile */}
-        <div className={`${sidebarVisible ? "block" : "hidden"} md:block`}>
-          <Sidebar
-            userName={userName}
-            userAvatar={userAvatar}
-            userZodiacSign={userZodiacSign}
-            activeLink={activeLink}
-            unreadMessages={unreadMessages}
-            newAchievements={newAchievements}
-            onNavigate={handleNavigate}
-          />
-        </div>
-
-        {/* Main content area */}
-        <main className="flex-1 overflow-hidden flex justify-center">
-          <FeedContainer
-            userAvatar={userAvatar}
-            userName={userName}
-            onPostCreate={handlePostCreate}
-          />
-        </main>
-
-        {/* AR Profile View - conditionally shown */}
-        {arViewVisible && (
-          <div className="hidden lg:block p-4">
-            <ARProfileView user={arProfileUser} onClose={handleARViewClose} />
-          </div>
-        )}
+    <>
+      {/* Main content area */}
+      <div className="flex-1 overflow-hidden flex justify-center">
+        <FeedContainer
+          userAvatar={userAvatar}
+          userName={userName}
+          onPostCreate={handlePostCreate}
+        />
       </div>
+
+      {/* AR Profile View - conditionally shown */}
+      {arViewVisible && (
+        <div className="hidden lg:block p-4 absolute right-4 top-20">
+          <ARProfileView user={arProfileUser} onClose={handleARViewClose} />
+        </div>
+      )}
 
       {/* Achievement notification */}
       <AchievementNotification
@@ -195,7 +182,7 @@ const Home = ({
       <div className="hidden fixed bottom-4 left-4 md:flex">
         <ZodiacDisplay sign={userZodiacSign} size="lg" showLabel={true} />
       </div>
-    </div>
+    </>
   );
 };
 

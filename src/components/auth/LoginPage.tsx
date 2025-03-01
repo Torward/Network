@@ -56,7 +56,14 @@ const LoginPage = ({ onLoginSuccess = () => {} }: LoginPageProps) => {
         password: loginData.password,
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.message.includes("Email not confirmed")) {
+          throw new Error(
+            "Email не подтвержден. Пожалуйста, проверьте вашу почту и перейдите по ссылке для подтверждения.",
+          );
+        }
+        throw error;
+      }
 
       // For demo purposes, we'll just simulate a successful login
       console.log("Login successful", data);
@@ -101,20 +108,28 @@ const LoginPage = ({ onLoginSuccess = () => {} }: LoginPageProps) => {
             name: registerData.name,
             birthdate: registerData.birthdate,
           },
+          emailRedirectTo: window.location.origin,
         },
       });
 
       if (error) throw error;
 
-      // For demo purposes, we'll just simulate a successful registration
-      console.log("Registration successful", data);
+      // Check if user needs to confirm email
+      if (data?.user?.identities?.length === 0) {
+        setError(
+          "Этот email уже зарегистрирован. Пожалуйста, войдите в систему.",
+        );
+        return;
+      }
 
       // Automatically assign zodiac sign based on birthdate
       const birthdate = new Date(registerData.birthdate);
       console.log("User birthdate:", birthdate, "Zodiac sign will be assigned");
 
       setActiveTab("login");
-      setError("Регистрация успешна! Пожалуйста, войдите в систему.");
+      setError(
+        "Регистрация успешна! Пожалуйста, подтвердите email и войдите в систему.",
+      );
     } catch (err: any) {
       console.error("Registration error:", err);
       setError(

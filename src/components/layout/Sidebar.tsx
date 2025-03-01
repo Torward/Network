@@ -11,6 +11,9 @@ import {
   HelpCircle,
   LogOut,
   Camera,
+  Code,
+  FileText,
+  Palette,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -84,6 +87,24 @@ const Sidebar = ({
       path: "/ar",
       highlight: true,
     },
+    {
+      id: "code-editor",
+      label: "Редактор кода",
+      icon: <Code className="h-5 w-5" />,
+      path: "/code-editor",
+    },
+    {
+      id: "text-editor",
+      label: "Текстовый редактор",
+      icon: <FileText className="h-5 w-5" />,
+      path: "/text-editor",
+    },
+    {
+      id: "graphic-editor",
+      label: "Графический редактор",
+      icon: <Palette className="h-5 w-5" />,
+      path: "/graphic-editor",
+    },
   ];
 
   const secondaryNavItems = [
@@ -127,10 +148,7 @@ const Sidebar = ({
                 key={item.id}
                 to={item.path}
                 className="block"
-                onClick={(e) => {
-                  e.preventDefault();
-                  onNavigate(item.path);
-                }}
+                onClick={() => onNavigate(item.path)}
               >
                 <motion.div
                   whileHover={{ x: 5 }}
@@ -174,10 +192,7 @@ const Sidebar = ({
                 key={item.id}
                 to={item.path}
                 className="block"
-                onClick={(e) => {
-                  e.preventDefault();
-                  onNavigate(item.path);
-                }}
+                onClick={() => onNavigate(item.path)}
               >
                 <motion.div
                   whileHover={{ x: 5 }}
