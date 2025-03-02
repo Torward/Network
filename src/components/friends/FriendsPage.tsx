@@ -1,12 +1,20 @@
 import React, { useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Search, UserPlus, UserCheck, MessageSquare, X } from "lucide-react";
+import {
+  Search,
+  UserPlus,
+  UserCheck,
+  MessageSquare,
+  X,
+  Network,
+} from "lucide-react";
 import ZodiacDisplay from "../profile/ZodiacDisplay";
+import FriendsNetworkGraph from "./FriendsNetworkGraph";
 
 interface FriendsPageProps {
   onNavigateToProfile?: (userId: string) => void;
@@ -130,6 +138,16 @@ const FriendsPage = ({
     friend.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
+  const handleAddFriend = (friendId: string) => {
+    // In a real app, this would send a friend request to the API
+    console.log(`Adding friend with ID: ${friendId}`);
+  };
+
+  const handleRemoveFriend = (friendId: string) => {
+    // In a real app, this would remove the friend via API
+    console.log(`Removing friend with ID: ${friendId}`);
+  };
+
   const renderFriendCard = (
     friend: FriendData,
     type: "friend" | "request" | "suggestion",
@@ -225,10 +243,16 @@ const FriendsPage = ({
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full grid grid-cols-3 mb-6">
+        <TabsList className="w-full grid grid-cols-5 mb-6">
           <TabsTrigger value="all">
             Все друзья
             <Badge className="ml-2 bg-primary">{friendsData.length}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="online">
+            Онлайн
+            <Badge className="ml-2 bg-green-500">
+              {friendsData.filter((friend) => friend.isOnline).length}
+            </Badge>
           </TabsTrigger>
           <TabsTrigger value="requests">
             Запросы
@@ -239,6 +263,10 @@ const FriendsPage = ({
           <TabsTrigger value="suggestions">
             Рекомендации
             <Badge className="ml-2 bg-primary">{suggestionsData.length}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="network">
+            <Network className="h-4 w-4 mr-1" />
+            Сеть связей
           </TabsTrigger>
         </TabsList>
 
@@ -251,6 +279,22 @@ const FriendsPage = ({
                 {searchQuery
                   ? "Друзья не найдены. Попробуйте другой поисковый запрос."
                   : "У вас пока нет друзей."}
+              </p>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="online" className="space-y-4">
+          {filteredFriends.filter((friend) => friend.isOnline).length > 0 ? (
+            filteredFriends
+              .filter((friend) => friend.isOnline)
+              .map((friend) => renderFriendCard(friend, "friend"))
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">
+                {searchQuery
+                  ? "Друзья онлайн не найдены. Попробуйте другой поисковый запрос."
+                  : "У вас нет друзей онлайн."}
               </p>
             </div>
           )}
@@ -286,6 +330,15 @@ const FriendsPage = ({
               </p>
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="network" className="space-y-4">
+          <div className="h-[600px] w-full">
+            <FriendsNetworkGraph
+              onAddFriend={handleAddFriend}
+              onRemoveFriend={handleRemoveFriend}
+            />
+          </div>
         </TabsContent>
       </Tabs>
     </div>

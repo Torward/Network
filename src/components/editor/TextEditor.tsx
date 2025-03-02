@@ -63,6 +63,13 @@ import {
   Subscript,
   Quote,
   Code,
+  User,
+  Lock,
+  GitBranch,
+  MessageSquare,
+  Users,
+  Minus,
+  Plus as PlusIcon,
 } from "lucide-react";
 import {
   Dialog,
@@ -77,7 +84,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import CollaborationPanel from "./CollaborationPanel";
 
 interface TextDocument {
   id: string;
@@ -90,6 +99,28 @@ interface TextDocument {
   styles?: DocumentStyles;
   comments?: DocumentComment[];
   revisions?: DocumentRevision[];
+  tables?: Table[];
+  userId?: string;
+  isPublic?: boolean;
+}
+
+interface Table {
+  id: string;
+  rows: number;
+  columns: number;
+  data: string[][];
+  position: number; // Position in the document
+  styles?: TableStyles;
+}
+
+interface TableStyles {
+  headerRow?: boolean;
+  headerColumn?: boolean;
+  striped?: boolean;
+  bordered?: boolean;
+  cellPadding?: number;
+  width?: string; // percentage or pixels
+  alignment?: "left" | "center" | "right";
 }
 
 interface DocumentStyles {
@@ -152,12 +183,81 @@ const TextEditor = () => {
   const [replaceText, setReplaceText] = useState("");
   const [searchMatches, setSearchMatches] = useState<number[]>([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(-1);
+  const [isAddingTable, setIsAddingTable] = useState(false);
+  const [newTableRows, setNewTableRows] = useState(3);
+  const [newTableColumns, setNewTableColumns] = useState(3);
+  const [newTableStyles, setNewTableStyles] = useState<TableStyles>({
+    headerRow: true,
+    headerColumn: false,
+    striped: false,
+    bordered: true,
+    cellPadding: 8,
+    width: "100%",
+    alignment: "left",
+  });
+  const [isImportingDocument, setIsImportingDocument] = useState(false);
+  const [importUrl, setImportUrl] = useState("");
+  const [lastOpenedDocumentId, setLastOpenedDocumentId] = useState<
+    string | null
+  >(null);
+  const [availableStyles, setAvailableStyles] = useState([
+    {
+      id: "1",
+      name: "Заголовок 1",
+      tag: "h1",
+      fontSize: 24,
+      fontWeight: "bold",
+    },
+    {
+      id: "2",
+      name: "Заголовок 2",
+      tag: "h2",
+      fontSize: 20,
+      fontWeight: "bold",
+    },
+    {
+      id: "3",
+      name: "Заголовок 3",
+      tag: "h3",
+      fontSize: 18,
+      fontWeight: "bold",
+    },
+    {
+      id: "4",
+      name: "Обычный текст",
+      tag: "p",
+      fontSize: 16,
+      fontWeight: "normal",
+    },
+    {
+      id: "5",
+      name: "Цитата",
+      tag: "blockquote",
+      fontSize: 16,
+      fontStyle: "italic",
+    },
+    { id: "6", name: "Код", tag: "pre", fontFamily: "monospace", fontSize: 14 },
+  ]);
+  const [activeStyleId, setActiveStyleId] = useState("4");
+  const [isCollaborationPanelOpen, setIsCollaborationPanelOpen] =
+    useState(false);
 
   // Load documents from localStorage on component mount
   useEffect(() => {
     const savedDocuments = localStorage.getItem("textDocuments");
     if (savedDocuments) {
       setDocuments(JSON.parse(savedDocuments));
+    }
+
+    // Load last opened document
+    const lastDocId = localStorage.getItem("lastOpenedTextDocument");
+    if (lastDocId && savedDocuments) {
+      const docs = JSON.parse(savedDocuments);
+      const lastDoc = docs.find((d: TextDocument) => d.id === lastDocId);
+      if (lastDoc) {
+        setCurrentDocument(lastDoc);
+        setLastOpenedDocumentId(lastDocId);
+      }
     }
   }, []);
 
@@ -172,6 +272,28 @@ const TextEditor = () => {
   useEffect(() => {
     if (currentDocument) {
       setContent(currentDocument.content);
+
+      // Save as last opened document
+      localStorage.setItem("lastOpenedTextDocument", currentDocument.id);
+      setLastOpenedDocumentId(currentDocument.id);
+
+      // Set document styles
+      if (currentDocument.styles) {
+        if (currentDocument.styles.fontSize) {
+          setFontSize([currentDocument.styles.fontSize]);
+        }
+        if (currentDocument.styles.fontFamily) {
+          setFontFamily(currentDocument.styles.fontFamily);
+        }
+        if (currentDocument.styles.lineSpacing) {
+          setLineSpacing([currentDocument.styles.lineSpacing]);
+        }
+      }
+
+      // Set comments
+      if (currentDocument.comments) {
+        setComments(currentDocument.comments);
+      }
     } else {
       setContent("");
     }
@@ -692,14 +814,31 @@ const TextEditor = () => {
               </div>
 
               <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExportDocument}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Экспорт
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Upload className="h-4 w-4 mr-2" />
+                      Импорт/Экспорт
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleExportDocument}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Экспорт как TXT
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setIsImportingDocument(true)}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Импорт документа
+                    </DropdownMenuItem>
+                    <DropdownMenuItem>
+                      <GitBranch className="h-4 w-4 mr-2" />
+                      Загрузить с GitHub
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
                 <Button
                   variant="outline"
                   size="sm"
@@ -708,7 +847,204 @@ const TextEditor = () => {
                   <Save className="h-4 w-4 mr-2" />
                   Сохранить
                 </Button>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Settings className="h-4 w-4 mr-2" />
+                      Настройки
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem>
+                      <User className="h-4 w-4 mr-2" />
+                      Профиль пользователя
+                    </DropdownMenuItem>
+                    <DropdownMenuItem>
+                      <Share2 className="h-4 w-4 mr-2" />
+                      Поделиться документом
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setIsCollaborationPanelOpen(true)}
+                    >
+                      <Users className="h-4 w-4 mr-2" />
+                      Совместное редактирование
+                    </DropdownMenuItem>
+                    <DropdownMenuItem>
+                      <Lock className="h-4 w-4 mr-2" />
+                      {currentDocument?.isPublic
+                        ? "Сделать приватным"
+                        : "Сделать публичным"}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
+
+              {/* Import dialog */}
+              {isImportingDocument && (
+                <Dialog
+                  open={isImportingDocument}
+                  onOpenChange={setIsImportingDocument}
+                >
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Импорт документа</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="import-url"
+                          className="text-sm font-medium"
+                        >
+                          URL документа
+                        </label>
+                        <Input
+                          id="import-url"
+                          value={importUrl}
+                          onChange={(e) => setImportUrl(e.target.value)}
+                          placeholder="https://example.com/document.txt"
+                        />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm text-muted-foreground">или</p>
+                      </div>
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="import-file"
+                          className="text-sm font-medium"
+                        >
+                          Загрузить с компьютера
+                        </label>
+                        <Input
+                          id="import-file"
+                          type="file"
+                          accept=".txt,.md,.html,.docx"
+                          onChange={(e) => {
+                            // Handle file upload
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                const content = event.target?.result as string;
+
+                                // Create new document from file
+                                const newDocument: TextDocument = {
+                                  id: Date.now().toString(),
+                                  title: file.name.replace(/\.[^/.]+$/, ""),
+                                  content: content,
+                                  createdAt: new Date().toISOString(),
+                                  updatedAt: new Date().toISOString(),
+                                  tags: [],
+                                  format: "plain",
+                                  styles: {
+                                    fontFamily: "Arial",
+                                    fontSize: 12,
+                                    lineSpacing: 1.5,
+                                    pageMargins: {
+                                      top: 2.54,
+                                      right: 2.54,
+                                      bottom: 2.54,
+                                      left: 2.54,
+                                    },
+                                    pageSize: "A4",
+                                    pageOrientation: "portrait",
+                                  },
+                                  comments: [],
+                                  revisions: [
+                                    {
+                                      id: "1",
+                                      author: "You",
+                                      date: new Date().toISOString(),
+                                      changes: "Document imported",
+                                    },
+                                  ],
+                                  userId: "current-user",
+                                  isPublic: false,
+                                };
+
+                                setDocuments([...documents, newDocument]);
+                                setCurrentDocument(newDocument);
+                                setIsImportingDocument(false);
+                              };
+                              reader.readAsText(file);
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsImportingDocument(false)}
+                      >
+                        Отмена
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          // Import from URL
+                          if (importUrl) {
+                            fetch(importUrl)
+                              .then((response) => response.text())
+                              .then((content) => {
+                                // Create new document from URL
+                                const fileName =
+                                  importUrl.split("/").pop() ||
+                                  "Imported Document";
+                                const newDocument: TextDocument = {
+                                  id: Date.now().toString(),
+                                  title: fileName.replace(/\.[^/.]+$/, ""),
+                                  content: content,
+                                  createdAt: new Date().toISOString(),
+                                  updatedAt: new Date().toISOString(),
+                                  tags: [],
+                                  format: "plain",
+                                  styles: {
+                                    fontFamily: "Arial",
+                                    fontSize: 12,
+                                    lineSpacing: 1.5,
+                                    pageMargins: {
+                                      top: 2.54,
+                                      right: 2.54,
+                                      bottom: 2.54,
+                                      left: 2.54,
+                                    },
+                                    pageSize: "A4",
+                                    pageOrientation: "portrait",
+                                  },
+                                  comments: [],
+                                  revisions: [
+                                    {
+                                      id: "1",
+                                      author: "You",
+                                      date: new Date().toISOString(),
+                                      changes: "Document imported from URL",
+                                    },
+                                  ],
+                                  userId: "current-user",
+                                  isPublic: false,
+                                };
+
+                                setDocuments([...documents, newDocument]);
+                                setCurrentDocument(newDocument);
+                                setIsImportingDocument(false);
+                                setImportUrl("");
+                              })
+                              .catch((error) => {
+                                alert(
+                                  "Не удалось загрузить документ по указанному URL: " +
+                                    error.message,
+                                );
+                              });
+                          }
+                        }}
+                        disabled={!importUrl}
+                      >
+                        Импортировать
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
 
             {/* Main toolbar */}
@@ -866,7 +1202,7 @@ const TextEditor = () => {
                         <Image className="h-4 w-4 mr-2" />
                         Изображение
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setIsAddingTable(true)}>
                         <Table className="h-4 w-4 mr-2" />
                         Таблица
                       </DropdownMenuItem>
@@ -936,7 +1272,7 @@ const TextEditor = () => {
                     </Button>
                     <span className="text-xs">{fontSize[0]}pt</span>
                     <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <Plus className="h-3 w-3" />
+                      <PlusIcon className="h-3 w-3" />
                     </Button>
                   </div>
                 </div>
@@ -1133,6 +1469,7 @@ const TextEditor = () => {
                   size="icon"
                   title="Таблица"
                   className="h-8 w-8"
+                  onClick={() => setIsAddingTable(true)}
                 >
                   <Table className="h-4 w-4" />
                 </Button>
@@ -1367,6 +1704,288 @@ const TextEditor = () => {
                     </div>
                   </div>
                 )}
+
+                {/* Add table dialog */}
+                {isAddingTable && (
+                  <div className="absolute right-8 top-1/4 w-80 bg-background border border-border rounded-md shadow-lg overflow-hidden">
+                    <div className="p-2 border-b border-border bg-muted/50 flex justify-between items-center">
+                      <h4 className="text-sm font-medium">Добавить таблицу</h4>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => setIsAddingTable(false)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Строки</label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={20}
+                            value={newTableRows}
+                            onChange={(e) =>
+                              setNewTableRows(parseInt(e.target.value) || 3)
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Столбцы</label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={10}
+                            value={newTableColumns}
+                            onChange={(e) =>
+                              setNewTableColumns(parseInt(e.target.value) || 3)
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">
+                          Стиль таблицы
+                        </label>
+                        <div className="flex flex-col space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <Switch
+                              checked={newTableStyles.headerRow}
+                              onCheckedChange={(checked) =>
+                                setNewTableStyles({
+                                  ...newTableStyles,
+                                  headerRow: checked,
+                                })
+                              }
+                              id="header-row"
+                            />
+                            <Label htmlFor="header-row">Заголовок строки</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Switch
+                              checked={newTableStyles.headerColumn}
+                              onCheckedChange={(checked) =>
+                                setNewTableStyles({
+                                  ...newTableStyles,
+                                  headerColumn: checked,
+                                })
+                              }
+                              id="header-column"
+                            />
+                            <Label htmlFor="header-column">
+                              Заголовок столбца
+                            </Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Switch
+                              checked={newTableStyles.striped}
+                              onCheckedChange={(checked) =>
+                                setNewTableStyles({
+                                  ...newTableStyles,
+                                  striped: checked,
+                                })
+                              }
+                              id="striped"
+                            />
+                            <Label htmlFor="striped">Чередующиеся строки</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Switch
+                              checked={newTableStyles.bordered}
+                              onCheckedChange={(checked) =>
+                                setNewTableStyles({
+                                  ...newTableStyles,
+                                  bordered: checked,
+                                })
+                              }
+                              id="bordered"
+                            />
+                            <Label htmlFor="bordered">Границы</Label>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">
+                          Выравнивание
+                        </label>
+                        <div className="flex space-x-2">
+                          <Button
+                            variant={
+                              newTableStyles.alignment === "left"
+                                ? "default"
+                                : "outline"
+                            }
+                            size="sm"
+                            onClick={() =>
+                              setNewTableStyles({
+                                ...newTableStyles,
+                                alignment: "left",
+                              })
+                            }
+                            className="flex-1"
+                          >
+                            <AlignLeft className="h-4 w-4 mr-2" />
+                            Слева
+                          </Button>
+                          <Button
+                            variant={
+                              newTableStyles.alignment === "center"
+                                ? "default"
+                                : "outline"
+                            }
+                            size="sm"
+                            onClick={() =>
+                              setNewTableStyles({
+                                ...newTableStyles,
+                                alignment: "center",
+                              })
+                            }
+                            className="flex-1"
+                          >
+                            <AlignCenter className="h-4 w-4 mr-2" />
+                            По центру
+                          </Button>
+                          <Button
+                            variant={
+                              newTableStyles.alignment === "right"
+                                ? "default"
+                                : "outline"
+                            }
+                            size="sm"
+                            onClick={() =>
+                              setNewTableStyles({
+                                ...newTableStyles,
+                                alignment: "right",
+                              })
+                            }
+                            className="flex-1"
+                          >
+                            <AlignRight className="h-4 w-4 mr-2" />
+                            Справа
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="pt-2">
+                        <Button
+                          className="w-full"
+                          onClick={() => {
+                            // Create table HTML
+                            const tableId = Date.now().toString();
+                            let tableHTML = `<table id="${tableId}" style="width:${newTableStyles.width};border-collapse:collapse;margin:1em 0;">`;
+
+                            // Create table data structure
+                            const tableData: string[][] = [];
+
+                            for (let i = 0; i < newTableRows; i++) {
+                              tableHTML += "<tr>";
+                              const rowData: string[] = [];
+
+                              for (let j = 0; j < newTableColumns; j++) {
+                                const isHeaderRow =
+                                  newTableStyles.headerRow && i === 0;
+                                const isHeaderCol =
+                                  newTableStyles.headerColumn && j === 0;
+                                const cellTag =
+                                  isHeaderRow || isHeaderCol ? "th" : "td";
+                                const cellStyle = [];
+
+                                if (newTableStyles.bordered) {
+                                  cellStyle.push("border:1px solid #ddd");
+                                }
+
+                                if (
+                                  newTableStyles.striped &&
+                                  i % 2 === 1 &&
+                                  !isHeaderRow
+                                ) {
+                                  cellStyle.push("background-color:#f9f9f9");
+                                }
+
+                                cellStyle.push(
+                                  `padding:${newTableStyles.cellPadding}px`,
+                                );
+                                cellStyle.push(
+                                  `text-align:${newTableStyles.alignment}`,
+                                );
+
+                                if (isHeaderRow || isHeaderCol) {
+                                  cellStyle.push("font-weight:bold");
+                                  cellStyle.push("background-color:#f2f2f2");
+                                }
+
+                                const cellContent = isHeaderRow
+                                  ? `Заголовок ${j + 1}`
+                                  : isHeaderCol
+                                    ? `Строка ${i}`
+                                    : `Ячейка ${i + 1},${j + 1}`;
+
+                                rowData.push(cellContent);
+
+                                tableHTML += `<${cellTag} style="${cellStyle.join(";")}">${cellContent}</${cellTag}>`;
+                              }
+
+                              tableData.push(rowData);
+                              tableHTML += "</tr>";
+                            }
+
+                            tableHTML += "</table>";
+
+                            // Create table object
+                            const table: Table = {
+                              id: tableId,
+                              rows: newTableRows,
+                              columns: newTableColumns,
+                              data: tableData,
+                              position: selectedText.start,
+                              styles: newTableStyles,
+                            };
+
+                            // Insert table into content
+                            const newContent =
+                              content.substring(0, selectedText.start) +
+                              tableHTML +
+                              content.substring(selectedText.end);
+
+                            setContent(newContent);
+
+                            // Update document tables
+                            if (currentDocument) {
+                              const updatedTables = [
+                                ...(currentDocument.tables || []),
+                                table,
+                              ];
+                              const updatedDocument = {
+                                ...currentDocument,
+                                content: newContent,
+                                tables: updatedTables,
+                                updatedAt: new Date().toISOString(),
+                              };
+
+                              setDocuments(
+                                documents.map((doc) =>
+                                  doc.id === currentDocument.id
+                                    ? updatedDocument
+                                    : doc,
+                                ),
+                              );
+                              setCurrentDocument(updatedDocument);
+                            }
+
+                            setIsAddingTable(false);
+                          }}
+                        >
+                          Вставить таблицу
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Comments panel */}
@@ -1522,6 +2141,15 @@ const TextEditor = () => {
           </div>
         )}
       </div>
+
+      {/* Collaboration Panel */}
+      <CollaborationPanel
+        isOpen={isCollaborationPanelOpen}
+        onClose={() => setIsCollaborationPanelOpen(false)}
+        projectName={currentDocument?.title || "Документ"}
+        projectType="text"
+        currentFile={currentDocument?.title}
+      />
     </div>
   );
 };

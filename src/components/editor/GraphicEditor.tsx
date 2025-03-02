@@ -1,6 +1,43 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { Card, CardContent, Car
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Slider } from "@/components/ui/slider";
+import {
+  Save,
+  Plus,
+  Image,
+  Settings,
+  Download,
+  Upload,
+  Trash2,
+  Square,
+  Circle,
+  Triangle,
+  Type,
+  Pencil,
+  Eraser,
+  Move,
+  Undo,
+  Redo,
+  Palette,
+  Layers,
+  Home,
+  X,
+  Minus,
+  Eye,
+  EyeOff,
+  User,
+  Share2,
+  Lock,
+  GitBranch,
+  MessageSquare,
+  Users,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -9,12 +46,14 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import CollaborationPanel from "./CollaborationPanel";
 
 interface GraphicProject {
   id: string;
@@ -26,9 +65,35 @@ interface GraphicProject {
   updatedAt: string;
   thumbnail: string;
   canvasData: string;
+  layers: Layer[];
+  userId?: string;
+  isPublic?: boolean;
 }
 
-const GraphicEditor = () => {
+interface Layer {
+  id: string;
+  name: string;
+  visible: boolean;
+  locked: boolean;
+  opacity: number;
+  data: string;
+  zIndex: number;
+}
+
+interface Brush {
+  id: string;
+  name: string;
+  size: number;
+  opacity: number;
+  hardness: number;
+  color: string;
+  type: "round" | "square" | "textured";
+  texture?: string;
+}
+
+interface GraphicEditorProps {}
+
+const GraphicEditor: React.FC<GraphicEditorProps> = () => {
   const [projects, setProjects] = useState<GraphicProject[]>([]);
   const [currentProject, setCurrentProject] = useState<GraphicProject | null>(
     null,
@@ -42,9 +107,52 @@ const GraphicEditor = () => {
   const [selectedTool, setSelectedTool] = useState("pencil");
   const [brushSize, setBrushSize] = useState([5]);
   const [brushColor, setBrushColor] = useState("#000000");
+  const [brushOpacity, setBrushOpacity] = useState([100]);
+  const [brushHardness, setBrushHardness] = useState([50]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
+  const [layers, setLayers] = useState<Layer[]>([]);
+  const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
+  const [showLayersPanel, setShowLayersPanel] = useState(false);
+  const [brushes, setBrushes] = useState<Brush[]>([
+    {
+      id: "1",
+      name: "Круглая кисть",
+      size: 5,
+      opacity: 100,
+      hardness: 100,
+      color: "#000000",
+      type: "round",
+    },
+    {
+      id: "2",
+      name: "Мягкая кисть",
+      size: 20,
+      opacity: 70,
+      hardness: 30,
+      color: "#000000",
+      type: "round",
+    },
+    {
+      id: "3",
+      name: "Квадратная кисть",
+      size: 10,
+      opacity: 100,
+      hardness: 100,
+      color: "#000000",
+      type: "square",
+    },
+  ]);
+  const [activeBrushId, setActiveBrushId] = useState("1");
+  const [showBrushesPanel, setShowBrushesPanel] = useState(false);
+  const [isImportingProject, setIsImportingProject] = useState(false);
+  const [importUrl, setImportUrl] = useState("");
+  const [lastOpenedProjectId, setLastOpenedProjectId] = useState<string | null>(
+    null,
+  );
+  const [isCollaborationPanelOpen, setIsCollaborationPanelOpen] =
+    useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastPos = useRef({ x: 0, y: 0 });
@@ -54,6 +162,19 @@ const GraphicEditor = () => {
     const savedProjects = localStorage.getItem("graphicProjects");
     if (savedProjects) {
       setProjects(JSON.parse(savedProjects));
+    }
+
+    // Load last opened project
+    const lastProjectId = localStorage.getItem("lastOpenedGraphicProject");
+    if (lastProjectId && savedProjects) {
+      const projects = JSON.parse(savedProjects);
+      const lastProject = projects.find(
+        (p: GraphicProject) => p.id === lastProjectId,
+      );
+      if (lastProject) {
+        setCurrentProject(lastProject);
+        setLastOpenedProjectId(lastProjectId);
+      }
     }
   }, []);
 
@@ -71,14 +192,67 @@ const GraphicEditor = () => {
       canvas.width = currentProject.width;
       canvas.height = currentProject.height;
 
-      const ctx = canvas.getContext("2d");
-      if (ctx && currentProject.canvasData) {
-        const img = new Image();
-        img.onload = () => {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0);
+      // Save as last opened project
+      localStorage.setItem("lastOpenedGraphicProject", currentProject.id);
+      setLastOpenedProjectId(currentProject.id);
+
+      // Initialize or load layers
+      if (!currentProject.layers || currentProject.layers.length === 0) {
+        // Create default layer if none exist
+        const defaultLayer: Layer = {
+          id: Date.now().toString(),
+          name: "Слой 1",
+          visible: true,
+          locked: false,
+          opacity: 100,
+          data: "",
+          zIndex: 0,
         };
-        img.src = currentProject.canvasData;
+
+        setLayers([defaultLayer]);
+        setActiveLayerId(defaultLayer.id);
+
+        // Update project with the new layer
+        const updatedProject = {
+          ...currentProject,
+          layers: [defaultLayer],
+        };
+        setCurrentProject(updatedProject);
+        setProjects(
+          projects.map((p) =>
+            p.id === currentProject.id ? updatedProject : p,
+          ),
+        );
+      } else {
+        // Load existing layers
+        setLayers(currentProject.layers);
+        setActiveLayerId(currentProject.layers[0].id);
+
+        // Draw all visible layers
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          // Sort layers by z-index
+          const sortedLayers = [...currentProject.layers].sort(
+            (a, b) => a.zIndex - b.zIndex,
+          );
+
+          // Draw each visible layer
+          sortedLayers.forEach((layer) => {
+            if (layer.visible && layer.data) {
+              const img = new Image();
+              img.onload = () => {
+                if (ctx) {
+                  ctx.globalAlpha = layer.opacity / 100;
+                  ctx.drawImage(img, 0, 0);
+                  ctx.globalAlpha = 1.0;
+                }
+              };
+              img.src = layer.data;
+            }
+          });
+        }
       }
 
       // Clear undo/redo stacks
@@ -90,6 +264,17 @@ const GraphicEditor = () => {
   const handleCreateProject = () => {
     if (!newProjectName.trim()) return;
 
+    // Create default layer
+    const defaultLayer: Layer = {
+      id: Date.now().toString(),
+      name: "Слой 1",
+      visible: true,
+      locked: false,
+      opacity: 100,
+      data: "",
+      zIndex: 0,
+    };
+
     const newProject: GraphicProject = {
       id: Date.now().toString(),
       name: newProjectName,
@@ -100,6 +285,9 @@ const GraphicEditor = () => {
       updatedAt: new Date().toISOString(),
       thumbnail: "",
       canvasData: "",
+      layers: [defaultLayer],
+      userId: "current-user", // In a real app, this would be the actual user ID
+      isPublic: false,
     };
 
     setProjects([...projects, newProject]);
@@ -112,38 +300,82 @@ const GraphicEditor = () => {
   };
 
   const handleSaveProject = () => {
-    if (!currentProject || !canvasRef.current) return;
+    if (!currentProject || !canvasRef.current || !activeLayerId) return;
 
     const canvas = canvasRef.current;
-    const canvasData = canvas.toDataURL("image/png");
 
-    // Create a thumbnail (scaled down version)
-    const thumbnailCanvas = document.createElement("canvas");
-    thumbnailCanvas.width = 200;
-    thumbnailCanvas.height = (200 * canvas.height) / canvas.width;
-    const thumbnailCtx = thumbnailCanvas.getContext("2d");
-    if (thumbnailCtx) {
-      thumbnailCtx.drawImage(
-        canvas,
-        0,
-        0,
-        thumbnailCanvas.width,
-        thumbnailCanvas.height,
+    // Update the active layer data
+    const updatedLayers = layers.map((layer) => {
+      if (layer.id === activeLayerId) {
+        return {
+          ...layer,
+          data: canvas.toDataURL("image/png"),
+        };
+      }
+      return layer;
+    });
+
+    // Render all layers to create the final composite image
+    const compositeCanvas = document.createElement("canvas");
+    compositeCanvas.width = canvas.width;
+    compositeCanvas.height = canvas.height;
+    const compositeCtx = compositeCanvas.getContext("2d");
+
+    if (compositeCtx) {
+      // Sort layers by z-index and draw them
+      const sortedLayers = [...updatedLayers].sort(
+        (a, b) => a.zIndex - b.zIndex,
       );
+
+      sortedLayers.forEach((layer) => {
+        if (layer.visible && layer.data) {
+          const img = new Image();
+          img.onload = () => {
+            if (compositeCtx) {
+              compositeCtx.globalAlpha = layer.opacity / 100;
+              compositeCtx.drawImage(img, 0, 0);
+              compositeCtx.globalAlpha = 1.0;
+            }
+          };
+          img.src = layer.data;
+        }
+      });
     }
-    const thumbnail = thumbnailCanvas.toDataURL("image/png");
 
-    const updatedProject = {
-      ...currentProject,
-      canvasData,
-      thumbnail,
-      updatedAt: new Date().toISOString(),
-    };
+    // Wait for all images to load and render
+    setTimeout(() => {
+      const canvasData = compositeCanvas.toDataURL("image/png");
 
-    setProjects(
-      projects.map((p) => (p.id === currentProject.id ? updatedProject : p)),
-    );
-    setCurrentProject(updatedProject);
+      // Create a thumbnail (scaled down version)
+      const thumbnailCanvas = document.createElement("canvas");
+      thumbnailCanvas.width = 200;
+      thumbnailCanvas.height = (200 * canvas.height) / canvas.width;
+      const thumbnailCtx = thumbnailCanvas.getContext("2d");
+      if (thumbnailCtx) {
+        thumbnailCtx.drawImage(
+          compositeCanvas,
+          0,
+          0,
+          thumbnailCanvas.width,
+          thumbnailCanvas.height,
+        );
+      }
+      const thumbnail = thumbnailCanvas.toDataURL("image/png");
+
+      const updatedProject = {
+        ...currentProject,
+        canvasData,
+        thumbnail,
+        layers: updatedLayers,
+        updatedAt: new Date().toISOString(),
+      };
+
+      setLayers(updatedLayers);
+      setProjects(
+        projects.map((p) => (p.id === currentProject.id ? updatedProject : p)),
+      );
+      setCurrentProject(updatedProject);
+    }, 100); // Small delay to ensure all images are loaded
   };
 
   const handleDeleteProject = (projectId: string) => {
@@ -169,7 +401,11 @@ const GraphicEditor = () => {
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current || !activeLayerId) return;
+
+    // Check if the active layer is locked
+    const activeLayer = layers.find((layer) => layer.id === activeLayerId);
+    if (activeLayer?.locked) return;
 
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
@@ -184,13 +420,28 @@ const GraphicEditor = () => {
     setUndoStack([...undoStack, currentState]);
     setRedoStack([]);
 
+    // Get the active brush
+    const activeBrush =
+      brushes.find((brush) => brush.id === activeBrushId) || brushes[0];
+
     // Start drawing based on selected tool
     const ctx = canvas.getContext("2d");
     if (ctx) {
       ctx.strokeStyle = brushColor;
       ctx.lineWidth = brushSize[0];
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
+      ctx.lineCap = activeBrush.type === "square" ? "butt" : "round";
+      ctx.lineJoin = activeBrush.type === "square" ? "miter" : "round";
+
+      // Apply opacity
+      ctx.globalAlpha = brushOpacity[0] / 100;
+
+      // Apply brush hardness (simplified simulation)
+      if (brushHardness[0] < 100 && selectedTool === "pencil") {
+        ctx.shadowBlur = (100 - brushHardness[0]) / 5;
+        ctx.shadowColor = brushColor;
+      } else {
+        ctx.shadowBlur = 0;
+      }
 
       if (selectedTool === "pencil") {
         ctx.beginPath();
@@ -199,7 +450,7 @@ const GraphicEditor = () => {
         ctx.globalCompositeOperation = "destination-out";
         ctx.beginPath();
         ctx.moveTo(x, y);
-      } else if (selectedTool === "rectangle") {
+      } else if (selectedTool === "rectangle" || selectedTool === "circle") {
         // For shapes, we'll handle in mouseUp
       }
     }
@@ -538,19 +789,262 @@ const GraphicEditor = () => {
               </div>
 
               <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExportProject}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Экспорт
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Upload className="h-4 w-4 mr-2" />
+                      Импорт/Экспорт
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleExportProject}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Экспорт как PNG
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setIsImportingProject(true)}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Импорт изображения
+                    </DropdownMenuItem>
+                    <DropdownMenuItem>
+                      <GitBranch className="h-4 w-4 mr-2" />
+                      Загрузить с GitHub
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
                 <Button variant="outline" size="sm" onClick={handleSaveProject}>
                   <Save className="h-4 w-4 mr-2" />
                   Сохранить
                 </Button>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Settings className="h-4 w-4 mr-2" />
+                      Настройки
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem>
+                      <User className="h-4 w-4 mr-2" />
+                      Профиль пользователя
+                    </DropdownMenuItem>
+                    <DropdownMenuItem>
+                      <Share2 className="h-4 w-4 mr-2" />
+                      Поделиться проектом
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setIsCollaborationPanelOpen(true)}
+                    >
+                      <Users className="h-4 w-4 mr-2" />
+                      Совместное редактирование
+                    </DropdownMenuItem>
+                    <DropdownMenuItem>
+                      <Lock className="h-4 w-4 mr-2" />
+                      {currentProject?.isPublic
+                        ? "Сделать приватным"
+                        : "Сделать публичным"}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
+
+              {/* Import dialog */}
+              {isImportingProject && (
+                <Dialog
+                  open={isImportingProject}
+                  onOpenChange={setIsImportingProject}
+                >
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Импорт изображения</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="import-url"
+                          className="text-sm font-medium"
+                        >
+                          URL изображения
+                        </label>
+                        <Input
+                          id="import-url"
+                          value={importUrl}
+                          onChange={(e) => setImportUrl(e.target.value)}
+                          placeholder="https://example.com/image.jpg"
+                        />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm text-muted-foreground">или</p>
+                      </div>
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="import-file"
+                          className="text-sm font-medium"
+                        >
+                          Загрузить с компьютера
+                        </label>
+                        <Input
+                          id="import-file"
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            // Handle file upload
+                            const file = e.target.files?.[0];
+                            if (file && currentProject && canvasRef.current) {
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                const img = new Image();
+                                img.onload = () => {
+                                  const canvas = canvasRef.current;
+                                  if (canvas) {
+                                    const ctx = canvas.getContext("2d");
+                                    if (ctx) {
+                                      ctx.clearRect(
+                                        0,
+                                        0,
+                                        canvas.width,
+                                        canvas.height,
+                                      );
+                                      ctx.drawImage(
+                                        img,
+                                        0,
+                                        0,
+                                        canvas.width,
+                                        canvas.height,
+                                      );
+
+                                      // Update active layer
+                                      if (activeLayerId) {
+                                        const updatedLayers = layers.map(
+                                          (layer) => {
+                                            if (layer.id === activeLayerId) {
+                                              return {
+                                                ...layer,
+                                                data: canvas.toDataURL(
+                                                  "image/png",
+                                                ),
+                                              };
+                                            }
+                                            return layer;
+                                          },
+                                        );
+                                        setLayers(updatedLayers);
+
+                                        // Update project
+                                        const updatedProject = {
+                                          ...currentProject,
+                                          layers: updatedLayers,
+                                        };
+                                        setCurrentProject(updatedProject);
+                                        setProjects(
+                                          projects.map((p) =>
+                                            p.id === currentProject.id
+                                              ? updatedProject
+                                              : p,
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  }
+                                };
+                                img.src = event.target?.result as string;
+                              };
+                              reader.readAsDataURL(file);
+                              setIsImportingProject(false);
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsImportingProject(false)}
+                      >
+                        Отмена
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          // Import from URL
+                          if (
+                            importUrl &&
+                            currentProject &&
+                            canvasRef.current
+                          ) {
+                            const img = new Image();
+                            img.crossOrigin = "anonymous";
+                            img.onload = () => {
+                              const canvas = canvasRef.current;
+                              if (canvas) {
+                                const ctx = canvas.getContext("2d");
+                                if (ctx) {
+                                  ctx.clearRect(
+                                    0,
+                                    0,
+                                    canvas.width,
+                                    canvas.height,
+                                  );
+                                  ctx.drawImage(
+                                    img,
+                                    0,
+                                    0,
+                                    canvas.width,
+                                    canvas.height,
+                                  );
+
+                                  // Update active layer
+                                  if (activeLayerId) {
+                                    const updatedLayers = layers.map(
+                                      (layer) => {
+                                        if (layer.id === activeLayerId) {
+                                          return {
+                                            ...layer,
+                                            data: canvas.toDataURL("image/png"),
+                                          };
+                                        }
+                                        return layer;
+                                      },
+                                    );
+                                    setLayers(updatedLayers);
+
+                                    // Update project
+                                    const updatedProject = {
+                                      ...currentProject,
+                                      layers: updatedLayers,
+                                    };
+                                    setCurrentProject(updatedProject);
+                                    setProjects(
+                                      projects.map((p) =>
+                                        p.id === currentProject.id
+                                          ? updatedProject
+                                          : p,
+                                      ),
+                                    );
+                                  }
+                                }
+                              }
+                            };
+                            img.onerror = () => {
+                              alert(
+                                "Не удалось загрузить изображение по указанному URL",
+                              );
+                            };
+                            img.src = importUrl;
+                            setIsImportingProject(false);
+                            setImportUrl("");
+                          }
+                        }}
+                        disabled={!importUrl}
+                      >
+                        Импортировать
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
 
             {/* Toolbar */}
@@ -597,6 +1091,51 @@ const GraphicEditor = () => {
                   <Type className="h-4 w-4" />
                 </Button>
                 <Separator orientation="vertical" className="h-6 mx-1" />
+
+                {/* Brush selector */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center"
+                    >
+                      <Palette className="h-4 w-4 mr-1" />
+                      Кисти
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    {brushes.map((brush) => (
+                      <DropdownMenuItem
+                        key={brush.id}
+                        onClick={() => {
+                          setActiveBrushId(brush.id);
+                          setBrushSize([brush.size]);
+                          setBrushOpacity([brush.opacity]);
+                          setBrushHardness([brush.hardness]);
+                        }}
+                        className={
+                          activeBrushId === brush.id ? "bg-accent" : ""
+                        }
+                      >
+                        <div className="flex items-center">
+                          <div
+                            className={`w-4 h-4 mr-2 rounded-full ${brush.type === "square" ? "rounded-sm" : "rounded-full"}`}
+                            style={{ backgroundColor: brush.color }}
+                          />
+                          {brush.name}
+                        </div>
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuItem
+                      onClick={() => setShowBrushesPanel(!showBrushesPanel)}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Управление кистями
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
                 <div className="flex items-center space-x-2">
                   <label
                     htmlFor="brush-color"
@@ -630,9 +1169,57 @@ const GraphicEditor = () => {
                   />
                   <span className="text-xs">{brushSize[0]}px</span>
                 </div>
+
+                <div className="flex items-center space-x-2">
+                  <label
+                    htmlFor="brush-opacity"
+                    className="text-xs text-muted-foreground"
+                  >
+                    Прозрачность:
+                  </label>
+                  <Slider
+                    id="brush-opacity"
+                    value={brushOpacity}
+                    onValueChange={setBrushOpacity}
+                    min={1}
+                    max={100}
+                    step={1}
+                    className="w-24"
+                  />
+                  <span className="text-xs">{brushOpacity[0]}%</span>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <label
+                    htmlFor="brush-hardness"
+                    className="text-xs text-muted-foreground"
+                  >
+                    Жесткость:
+                  </label>
+                  <Slider
+                    id="brush-hardness"
+                    value={brushHardness}
+                    onValueChange={setBrushHardness}
+                    min={0}
+                    max={100}
+                    step={1}
+                    className="w-24"
+                  />
+                  <span className="text-xs">{brushHardness[0]}%</span>
+                </div>
               </div>
 
               <div className="flex items-center space-x-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowLayersPanel(!showLayersPanel)}
+                  className="flex items-center"
+                >
+                  <Layers className="h-4 w-4 mr-1" />
+                  Слои
+                </Button>
+
                 <Button
                   variant="outline"
                   size="icon"
@@ -662,19 +1249,443 @@ const GraphicEditor = () => {
               </div>
             </div>
 
-            {/* Canvas area */}
-            <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
-              <div className="relative bg-white shadow-md">
-                <canvas
-                  ref={canvasRef}
-                  width={currentProject.width}
-                  height={currentProject.height}
-                  onMouseDown={handleMouseDown}
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUp}
-                  onMouseLeave={handleMouseUp}
-                  className="cursor-crosshair"
-                />
+            {/* Canvas area with layers panel */}
+            <div className="flex-1 overflow-auto flex bg-gray-100 dark:bg-gray-800">
+              {/* Layers panel */}
+              {showLayersPanel && (
+                <div className="w-64 bg-background border-r border-border">
+                  <div className="p-2 border-b border-border flex justify-between items-center">
+                    <h3 className="text-sm font-medium">Слои</h3>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => {
+                        // Add new layer
+                        if (!currentProject) return;
+
+                        const newLayer: Layer = {
+                          id: Date.now().toString(),
+                          name: `Слой ${layers.length + 1}`,
+                          visible: true,
+                          locked: false,
+                          opacity: 100,
+                          data: "",
+                          zIndex: layers.length,
+                        };
+
+                        const updatedLayers = [...layers, newLayer];
+                        setLayers(updatedLayers);
+                        setActiveLayerId(newLayer.id);
+
+                        // Update project
+                        const updatedProject = {
+                          ...currentProject,
+                          layers: updatedLayers,
+                        };
+                        setCurrentProject(updatedProject);
+                        setProjects(
+                          projects.map((p) =>
+                            p.id === currentProject.id ? updatedProject : p,
+                          ),
+                        );
+                      }}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <ScrollArea className="h-[calc(100%-36px)]">
+                    <div className="p-2 space-y-1">
+                      {layers
+                        .sort((a, b) => b.zIndex - a.zIndex)
+                        .map((layer) => (
+                          <div
+                            key={layer.id}
+                            className={`p-2 rounded-md ${activeLayerId === layer.id ? "bg-accent" : "hover:bg-accent/50"} ${!layer.visible ? "opacity-50" : ""}`}
+                            onClick={() => setActiveLayerId(layer.id)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 mr-1"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Toggle visibility
+                                    const updatedLayers = layers.map((l) => {
+                                      if (l.id === layer.id) {
+                                        return { ...l, visible: !l.visible };
+                                      }
+                                      return l;
+                                    });
+                                    setLayers(updatedLayers);
+
+                                    // Update project
+                                    if (currentProject) {
+                                      const updatedProject = {
+                                        ...currentProject,
+                                        layers: updatedLayers,
+                                      };
+                                      setCurrentProject(updatedProject);
+                                      setProjects(
+                                        projects.map((p) =>
+                                          p.id === currentProject.id
+                                            ? updatedProject
+                                            : p,
+                                        ),
+                                      );
+                                    }
+                                  }}
+                                >
+                                  {layer.visible ? (
+                                    <Eye className="h-3 w-3" />
+                                  ) : (
+                                    <EyeOff className="h-3 w-3" />
+                                  )}
+                                </Button>
+                                <span className="text-sm truncate">
+                                  {layer.name}
+                                </span>
+                              </div>
+
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Settings className="h-3 w-3" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      // Toggle lock
+                                      const updatedLayers = layers.map((l) => {
+                                        if (l.id === layer.id) {
+                                          return { ...l, locked: !l.locked };
+                                        }
+                                        return l;
+                                      });
+                                      setLayers(updatedLayers);
+
+                                      // Update project
+                                      if (currentProject) {
+                                        const updatedProject = {
+                                          ...currentProject,
+                                          layers: updatedLayers,
+                                        };
+                                        setCurrentProject(updatedProject);
+                                        setProjects(
+                                          projects.map((p) =>
+                                            p.id === currentProject.id
+                                              ? updatedProject
+                                              : p,
+                                          ),
+                                        );
+                                      }
+                                    }}
+                                  >
+                                    {layer.locked
+                                      ? "Разблокировать"
+                                      : "Заблокировать"}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      // Move layer up
+                                      if (layer.zIndex < layers.length - 1) {
+                                        const updatedLayers = layers.map(
+                                          (l) => {
+                                            if (l.id === layer.id) {
+                                              return {
+                                                ...l,
+                                                zIndex: l.zIndex + 1,
+                                              };
+                                            } else if (
+                                              l.zIndex ===
+                                              layer.zIndex + 1
+                                            ) {
+                                              return {
+                                                ...l,
+                                                zIndex: l.zIndex - 1,
+                                              };
+                                            }
+                                            return l;
+                                          },
+                                        );
+                                        setLayers(updatedLayers);
+
+                                        // Update project
+                                        if (currentProject) {
+                                          const updatedProject = {
+                                            ...currentProject,
+                                            layers: updatedLayers,
+                                          };
+                                          setCurrentProject(updatedProject);
+                                          setProjects(
+                                            projects.map((p) =>
+                                              p.id === currentProject.id
+                                                ? updatedProject
+                                                : p,
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    }}
+                                  >
+                                    Переместить выше
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      // Move layer down
+                                      if (layer.zIndex > 0) {
+                                        const updatedLayers = layers.map(
+                                          (l) => {
+                                            if (l.id === layer.id) {
+                                              return {
+                                                ...l,
+                                                zIndex: l.zIndex - 1,
+                                              };
+                                            } else if (
+                                              l.zIndex ===
+                                              layer.zIndex - 1
+                                            ) {
+                                              return {
+                                                ...l,
+                                                zIndex: l.zIndex + 1,
+                                              };
+                                            }
+                                            return l;
+                                          },
+                                        );
+                                        setLayers(updatedLayers);
+
+                                        // Update project
+                                        if (currentProject) {
+                                          const updatedProject = {
+                                            ...currentProject,
+                                            layers: updatedLayers,
+                                          };
+                                          setCurrentProject(updatedProject);
+                                          setProjects(
+                                            projects.map((p) =>
+                                              p.id === currentProject.id
+                                                ? updatedProject
+                                                : p,
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    }}
+                                  >
+                                    Переместить ниже
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      // Delete layer (if not the only one)
+                                      if (layers.length > 1) {
+                                        const updatedLayers = layers.filter(
+                                          (l) => l.id !== layer.id,
+                                        );
+                                        setLayers(updatedLayers);
+
+                                        // Set active layer to the first one if deleting active layer
+                                        if (activeLayerId === layer.id) {
+                                          setActiveLayerId(updatedLayers[0].id);
+                                        }
+
+                                        // Update project
+                                        if (currentProject) {
+                                          const updatedProject = {
+                                            ...currentProject,
+                                            layers: updatedLayers,
+                                          };
+                                          setCurrentProject(updatedProject);
+                                          setProjects(
+                                            projects.map((p) =>
+                                              p.id === currentProject.id
+                                                ? updatedProject
+                                                : p,
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    }}
+                                    className="text-red-500"
+                                  >
+                                    Удалить слой
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+
+                            {/* Layer opacity slider */}
+                            <div className="mt-1 flex items-center">
+                              <span className="text-xs mr-2 w-16">
+                                Прозрачность:
+                              </span>
+                              <Slider
+                                value={[layer.opacity]}
+                                onValueChange={(value) => {
+                                  // Update layer opacity
+                                  const updatedLayers = layers.map((l) => {
+                                    if (l.id === layer.id) {
+                                      return { ...l, opacity: value[0] };
+                                    }
+                                    return l;
+                                  });
+                                  setLayers(updatedLayers);
+
+                                  // Update project
+                                  if (currentProject) {
+                                    const updatedProject = {
+                                      ...currentProject,
+                                      layers: updatedLayers,
+                                    };
+                                    setCurrentProject(updatedProject);
+                                    setProjects(
+                                      projects.map((p) =>
+                                        p.id === currentProject.id
+                                          ? updatedProject
+                                          : p,
+                                      ),
+                                    );
+                                  }
+                                }}
+                                min={0}
+                                max={100}
+                                step={1}
+                                className="w-24"
+                              />
+                              <span className="text-xs ml-2">
+                                {layer.opacity}%
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+
+              {/* Brushes panel */}
+              {showBrushesPanel && (
+                <div className="absolute right-4 top-20 w-80 bg-background border border-border rounded-md shadow-lg z-10">
+                  <div className="p-2 border-b border-border flex justify-between items-center">
+                    <h3 className="text-sm font-medium">Управление кистями</h3>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => setShowBrushesPanel(false)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <div className="p-4 space-y-4">
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-medium">Доступные кисти</h4>
+                      {brushes.map((brush) => (
+                        <div
+                          key={brush.id}
+                          className={`p-2 rounded-md ${activeBrushId === brush.id ? "bg-accent" : "hover:bg-accent/50"}`}
+                          onClick={() => {
+                            setActiveBrushId(brush.id);
+                            setBrushSize([brush.size]);
+                            setBrushOpacity([brush.opacity]);
+                            setBrushHardness([brush.hardness]);
+                            setBrushColor(brush.color);
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              <div
+                                className={`w-6 h-6 mr-2 ${brush.type === "square" ? "rounded-sm" : "rounded-full"}`}
+                                style={{ backgroundColor: brush.color }}
+                              />
+                              <span>{brush.name}</span>
+                            </div>
+
+                            <div className="text-xs text-muted-foreground">
+                              {brush.size}px, {brush.opacity}%
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-medium">
+                        Сохранить текущую кисть
+                      </h4>
+                      <Input
+                        placeholder="Название кисти"
+                        className="mb-2"
+                        value={
+                          activeBrushId
+                            ? brushes.find((b) => b.id === activeBrushId)
+                                ?.name || ""
+                            : ""
+                        }
+                        onChange={(e) => {
+                          // Update brush name
+                          if (activeBrushId) {
+                            const updatedBrushes = brushes.map((b) => {
+                              if (b.id === activeBrushId) {
+                                return { ...b, name: e.target.value };
+                              }
+                              return b;
+                            });
+                            setBrushes(updatedBrushes);
+                          }
+                        }}
+                      />
+                      <Button
+                        className="w-full"
+                        onClick={() => {
+                          // Save current brush settings as a new brush
+                          const newBrush: Brush = {
+                            id: Date.now().toString(),
+                            name: `Новая кисть ${brushes.length + 1}`,
+                            size: brushSize[0],
+                            opacity: brushOpacity[0],
+                            hardness: brushHardness[0],
+                            color: brushColor,
+                            type: "round",
+                          };
+
+                          setBrushes([...brushes, newBrush]);
+                          setActiveBrushId(newBrush.id);
+                        }}
+                      >
+                        Сохранить как новую кисть
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Canvas */}
+              <div className="flex-1 p-4 flex items-center justify-center">
+                <div className="relative bg-white shadow-md">
+                  <canvas
+                    ref={canvasRef}
+                    width={currentProject.width}
+                    height={currentProject.height}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
+                    className="cursor-crosshair"
+                  />
+                </div>
               </div>
             </div>
           </>
@@ -697,6 +1708,15 @@ const GraphicEditor = () => {
           </div>
         )}
       </div>
+
+      {/* Collaboration Panel */}
+      <CollaborationPanel
+        isOpen={isCollaborationPanelOpen}
+        onClose={() => setIsCollaborationPanelOpen(false)}
+        projectName={currentProject?.name || "Проект"}
+        projectType="graphic"
+        currentFile={currentProject?.name}
+      />
     </div>
   );
 };

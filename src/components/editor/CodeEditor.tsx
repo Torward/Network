@@ -37,6 +37,8 @@ import {
   Wrench,
   Lightbulb,
   Layers,
+  MessageSquare,
+  Users,
 } from "lucide-react";
 import {
   Dialog,
@@ -46,6 +48,7 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
+import CollaborationPanel from "./CollaborationPanel";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -113,6 +116,8 @@ const CodeEditor = () => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [cursorPosition, setCursorPosition] = useState({ line: 0, column: 0 });
+  const [isCollaborationPanelOpen, setIsCollaborationPanelOpen] =
+    useState(false);
 
   // Load projects from localStorage on component mount
   useEffect(() => {
@@ -875,6 +880,12 @@ const CodeEditor = () => {
                               <GitMerge className="h-4 w-4 mr-2" />
                               Управление ветками
                             </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setIsCollaborationPanelOpen(true)}
+                            >
+                              <Users className="h-4 w-4 mr-2" />
+                              Совместное редактирование
+                            </DropdownMenuItem>
                             <DropdownMenuItem>
                               <Wrench className="h-4 w-4 mr-2" />
                               Настройки проекта
@@ -1216,6 +1227,15 @@ const CodeEditor = () => {
           </div>
         )}
       </div>
+
+      {/* Collaboration Panel */}
+      <CollaborationPanel
+        isOpen={isCollaborationPanelOpen}
+        onClose={() => setIsCollaborationPanelOpen(false)}
+        projectName={currentProject?.name || "Проект"}
+        projectType="code"
+        currentFile={currentFile?.name}
+      />
     </div>
   );
 };

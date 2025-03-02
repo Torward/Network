@@ -33,6 +33,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+
+      // Update user's online status when session is loaded
+      if (session?.user) {
+        supabase
+          .from("users")
+          .update({ is_online: true, last_active: new Date().toISOString() })
+          .eq("id", session.user.id)
+          .then(({ error }) => {
+            if (error) console.error("Error updating online status:", error);
+          });
+      }
+
       setLoading(false);
     });
 
@@ -42,11 +54,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
+
+      // Update user's online status when auth state changes
+      if (session?.user) {
+        supabase
+          .from("users")
+          .update({ is_online: true, last_active: new Date().toISOString() })
+          .eq("id", session.user.id)
+          .then(({ error }) => {
+            if (error) console.error("Error updating online status:", error);
+          });
+      }
+
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    // Set up window beforeunload event to update online status when user closes the browser
+    const handleBeforeUnload = () => {
+      if (user) {
+        // Use navigator.sendBeacon for more reliable delivery during page unload
+        const data = new FormData();
+        data.append("id", user.id);
+        data.append("is_online", "false");
+        data.append("last_active", new Date().toISOString());
+
+        // This is a synchronous API that works during page unload
+        navigator.sendBeacon(
+          `${supabase.supabaseUrl}/rest/v1/users?id=eq.${user.id}`,
+          data,
+        );
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [user]);
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -89,6 +135,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
       setError(null);
+
+      // Update user's online status before signing out
+      if (user) {
+        await supabase
+          .from("users")
+          .update({ is_online: false, last_active: new Date().toISOString() })
+          .eq("id", user.id);
+      }
+
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
     } catch (error: any) {
