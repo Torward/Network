@@ -4,39 +4,88 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import {
   Save,
   Plus,
-  Image,
+  Folder,
+  File,
   Settings,
   Download,
   Upload,
   Trash2,
+  Copy,
+  FolderPlus,
+  FilePlus,
+  Home,
+  Search,
+  RefreshCw,
+  GitBranch,
+  GitMerge,
+  GitPullRequest,
+  Terminal,
+  Bug,
+  Code as CodeIcon,
+  Zap,
+  Sparkles,
+  Wrench,
+  Lightbulb,
+  Layers,
+  MessageSquare,
+  Users,
+  Maximize2,
+  Minimize2,
+  X,
   Square,
   Circle,
   Triangle,
+  Hexagon,
+  Star,
   Type,
-  Pencil,
-  Eraser,
+  Image,
+  Palette,
+  Scissors,
   Move,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
   Undo,
   Redo,
-  Palette,
-  Layers,
-  Home,
-  X,
-  Minus,
-  Eye,
-  EyeOff,
-  User,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
+  Bold,
+  Italic,
+  Underline,
+  PenTool,
+  Eraser,
+  Pipette,
+  Grid,
+  Ruler,
+  Crop,
   Share2,
   Lock,
-  GitBranch,
-  MessageSquare,
-  Users,
+  Unlock,
+  Group,
+  Ungroup,
+  ArrowUp,
+  ArrowDown,
+  ChevronDown,
+  Edit,
+  MousePointer,
+  Maximize,
+  Magnet,
+  Clipboard,
+  Eye,
+  EyeOff,
+  MoreVertical,
 } from "lucide-react";
 import {
   Dialog,
@@ -46,12 +95,12 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
-
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import CollaborationPanel from "./CollaborationPanel";
 
@@ -59,13 +108,14 @@ interface GraphicProject {
   id: string;
   name: string;
   description: string;
-  width: number;
-  height: number;
   createdAt: string;
   updatedAt: string;
-  thumbnail: string;
-  canvasData: string;
+  width: number;
+  height: number;
   layers: Layer[];
+  elements: GraphicElement[];
+  background: string;
+  tags: string[];
   userId?: string;
   isPublic?: boolean;
 }
@@ -76,24 +126,36 @@ interface Layer {
   visible: boolean;
   locked: boolean;
   opacity: number;
-  data: string;
-  zIndex: number;
+  elements: string[]; // IDs of elements in this layer
 }
 
-interface Brush {
+interface GraphicElement {
   id: string;
-  name: string;
-  size: number;
-  opacity: number;
-  hardness: number;
-  color: string;
-  type: "round" | "square" | "textured";
-  texture?: string;
+  type: "rect" | "circle" | "triangle" | "path" | "text" | "image";
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  radius?: number;
+  points?: { x: number; y: number }[];
+  text?: string;
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: string;
+  fontStyle?: string;
+  textDecoration?: string;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  opacity?: number;
+  rotation?: number;
+  imageUrl?: string;
+  layerId: string;
+  zIndex: number;
+  locked?: boolean;
 }
 
-interface GraphicEditorProps {}
-
-const GraphicEditor: React.FC<GraphicEditorProps> = () => {
+const GraphicEditor = () => {
   const [projects, setProjects] = useState<GraphicProject[]>([]);
   const [currentProject, setCurrentProject] = useState<GraphicProject | null>(
     null,
@@ -103,59 +165,60 @@ const GraphicEditor: React.FC<GraphicEditorProps> = () => {
   const [newProjectDescription, setNewProjectDescription] = useState("");
   const [newProjectWidth, setNewProjectWidth] = useState(800);
   const [newProjectHeight, setNewProjectHeight] = useState(600);
+  const [newProjectTags, setNewProjectTags] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedTool, setSelectedTool] = useState("pencil");
-  const [brushSize, setBrushSize] = useState([5]);
-  const [brushColor, setBrushColor] = useState("#000000");
-  const [brushOpacity, setBrushOpacity] = useState([100]);
-  const [brushHardness, setBrushHardness] = useState([50]);
+  const [selectedElements, setSelectedElements] = useState<string[]>([]);
+  const [currentTool, setCurrentTool] = useState<
+    | "select"
+    | "rectangle"
+    | "circle"
+    | "triangle"
+    | "pen"
+    | "text"
+    | "image"
+    | "eraser"
+    | "pipette"
+    | "move"
+  >("select");
+  const [zoom, setZoom] = useState([1]);
+  const [canvasPosition, setCanvasPosition] = useState({ x: 0, y: 0 });
+  const [fillColor, setFillColor] = useState("#3b82f6");
+  const [strokeColor, setStrokeColor] = useState("#000000");
+  const [strokeWidth, setStrokeWidth] = useState([2]);
+  const [fontSize, setFontSize] = useState([16]);
+  const [fontFamily, setFontFamily] = useState("Arial");
+  const [showGrid, setShowGrid] = useState(true);
+  const [showRulers, setShowRulers] = useState(true);
+  const [snapToGrid, setSnapToGrid] = useState(true);
+  const [gridSize, setGridSize] = useState(20);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [undoStack, setUndoStack] = useState<string[]>([]);
-  const [redoStack, setRedoStack] = useState<string[]>([]);
-  const [layers, setLayers] = useState<Layer[]>([]);
-  const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
-  const [showLayersPanel, setShowLayersPanel] = useState(false);
-  const [brushes, setBrushes] = useState<Brush[]>([
-    {
-      id: "1",
-      name: "Круглая кисть",
-      size: 5,
-      opacity: 100,
-      hardness: 100,
-      color: "#000000",
-      type: "round",
-    },
-    {
-      id: "2",
-      name: "Мягкая кисть",
-      size: 20,
-      opacity: 70,
-      hardness: 30,
-      color: "#000000",
-      type: "round",
-    },
-    {
-      id: "3",
-      name: "Квадратная кисть",
-      size: 10,
-      opacity: 100,
-      hardness: 100,
-      color: "#000000",
-      type: "square",
-    },
-  ]);
-  const [activeBrushId, setActiveBrushId] = useState("1");
-  const [showBrushesPanel, setShowBrushesPanel] = useState(false);
-  const [isImportingProject, setIsImportingProject] = useState(false);
-  const [importUrl, setImportUrl] = useState("");
+  const [drawingPath, setDrawingPath] = useState<{ x: number; y: number }[]>(
+    [],
+  );
+  const [isAddingText, setIsAddingText] = useState(false);
+  const [newText, setNewText] = useState("");
+  const [isImportingImage, setIsImportingImage] = useState(false);
+  const [imageUrl, setImageUrl] = useState("");
   const [lastOpenedProjectId, setLastOpenedProjectId] = useState<string | null>(
     null,
   );
   const [isCollaborationPanelOpen, setIsCollaborationPanelOpen] =
     useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const lastPos = useRef({ x: 0, y: 0 });
+  const canvasRef = useRef<HTMLDivElement>(null);
+
+  // Handle ESC key to exit fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isFullScreen) {
+        setIsFullScreen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isFullScreen]);
 
   // Load projects from localStorage on component mount
   useEffect(() => {
@@ -167,8 +230,8 @@ const GraphicEditor: React.FC<GraphicEditorProps> = () => {
     // Load last opened project
     const lastProjectId = localStorage.getItem("lastOpenedGraphicProject");
     if (lastProjectId && savedProjects) {
-      const projects = JSON.parse(savedProjects);
-      const lastProject = projects.find(
+      const projectsList = JSON.parse(savedProjects);
+      const lastProject = projectsList.find(
         (p: GraphicProject) => p.id === lastProjectId,
       );
       if (lastProject) {
@@ -185,108 +248,44 @@ const GraphicEditor: React.FC<GraphicEditorProps> = () => {
     }
   }, [projects]);
 
-  // Initialize canvas when current project changes
+  // Update last opened project
   useEffect(() => {
-    if (currentProject && canvasRef.current) {
-      const canvas = canvasRef.current;
-      canvas.width = currentProject.width;
-      canvas.height = currentProject.height;
-
-      // Save as last opened project
+    if (currentProject) {
       localStorage.setItem("lastOpenedGraphicProject", currentProject.id);
       setLastOpenedProjectId(currentProject.id);
-
-      // Initialize or load layers
-      if (!currentProject.layers || currentProject.layers.length === 0) {
-        // Create default layer if none exist
-        const defaultLayer: Layer = {
-          id: Date.now().toString(),
-          name: "Слой 1",
-          visible: true,
-          locked: false,
-          opacity: 100,
-          data: "",
-          zIndex: 0,
-        };
-
-        setLayers([defaultLayer]);
-        setActiveLayerId(defaultLayer.id);
-
-        // Update project with the new layer
-        const updatedProject = {
-          ...currentProject,
-          layers: [defaultLayer],
-        };
-        setCurrentProject(updatedProject);
-        setProjects(
-          projects.map((p) =>
-            p.id === currentProject.id ? updatedProject : p,
-          ),
-        );
-      } else {
-        // Load existing layers
-        setLayers(currentProject.layers);
-        setActiveLayerId(currentProject.layers[0].id);
-
-        // Draw all visible layers
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-          // Sort layers by z-index
-          const sortedLayers = [...currentProject.layers].sort(
-            (a, b) => a.zIndex - b.zIndex,
-          );
-
-          // Draw each visible layer
-          sortedLayers.forEach((layer) => {
-            if (layer.visible && layer.data) {
-              const img = new Image();
-              img.onload = () => {
-                if (ctx) {
-                  ctx.globalAlpha = layer.opacity / 100;
-                  ctx.drawImage(img, 0, 0);
-                  ctx.globalAlpha = 1.0;
-                }
-              };
-              img.src = layer.data;
-            }
-          });
-        }
-      }
-
-      // Clear undo/redo stacks
-      setUndoStack([]);
-      setRedoStack([]);
     }
   }, [currentProject]);
 
   const handleCreateProject = () => {
     if (!newProjectName.trim()) return;
 
-    // Create default layer
-    const defaultLayer: Layer = {
-      id: Date.now().toString(),
-      name: "Слой 1",
-      visible: true,
-      locked: false,
-      opacity: 100,
-      data: "",
-      zIndex: 0,
-    };
+    const tags = newProjectTags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter((tag) => tag);
 
     const newProject: GraphicProject = {
       id: Date.now().toString(),
       name: newProjectName,
       description: newProjectDescription,
-      width: newProjectWidth,
-      height: newProjectHeight,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      thumbnail: "",
-      canvasData: "",
-      layers: [defaultLayer],
-      userId: "current-user", // In a real app, this would be the actual user ID
+      width: newProjectWidth,
+      height: newProjectHeight,
+      layers: [
+        {
+          id: "layer-1",
+          name: "Layer 1",
+          visible: true,
+          locked: false,
+          opacity: 1,
+          elements: [],
+        },
+      ],
+      elements: [],
+      background: "#ffffff",
+      tags,
+      userId: "current-user",
       isPublic: false,
     };
 
@@ -297,89 +296,29 @@ const GraphicEditor: React.FC<GraphicEditorProps> = () => {
     setNewProjectDescription("");
     setNewProjectWidth(800);
     setNewProjectHeight(600);
+    setNewProjectTags("");
   };
 
   const handleSaveProject = () => {
-    if (!currentProject || !canvasRef.current || !activeLayerId) return;
+    if (!currentProject) return;
 
-    const canvas = canvasRef.current;
+    const updatedProject = {
+      ...currentProject,
+      updatedAt: new Date().toISOString(),
+    };
 
-    // Update the active layer data
-    const updatedLayers = layers.map((layer) => {
-      if (layer.id === activeLayerId) {
-        return {
-          ...layer,
-          data: canvas.toDataURL("image/png"),
-        };
-      }
-      return layer;
-    });
-
-    // Render all layers to create the final composite image
-    const compositeCanvas = document.createElement("canvas");
-    compositeCanvas.width = canvas.width;
-    compositeCanvas.height = canvas.height;
-    const compositeCtx = compositeCanvas.getContext("2d");
-
-    if (compositeCtx) {
-      // Sort layers by z-index and draw them
-      const sortedLayers = [...updatedLayers].sort(
-        (a, b) => a.zIndex - b.zIndex,
-      );
-
-      sortedLayers.forEach((layer) => {
-        if (layer.visible && layer.data) {
-          const img = new Image();
-          img.onload = () => {
-            if (compositeCtx) {
-              compositeCtx.globalAlpha = layer.opacity / 100;
-              compositeCtx.drawImage(img, 0, 0);
-              compositeCtx.globalAlpha = 1.0;
-            }
-          };
-          img.src = layer.data;
-        }
-      });
-    }
-
-    // Wait for all images to load and render
-    setTimeout(() => {
-      const canvasData = compositeCanvas.toDataURL("image/png");
-
-      // Create a thumbnail (scaled down version)
-      const thumbnailCanvas = document.createElement("canvas");
-      thumbnailCanvas.width = 200;
-      thumbnailCanvas.height = (200 * canvas.height) / canvas.width;
-      const thumbnailCtx = thumbnailCanvas.getContext("2d");
-      if (thumbnailCtx) {
-        thumbnailCtx.drawImage(
-          compositeCanvas,
-          0,
-          0,
-          thumbnailCanvas.width,
-          thumbnailCanvas.height,
-        );
-      }
-      const thumbnail = thumbnailCanvas.toDataURL("image/png");
-
-      const updatedProject = {
-        ...currentProject,
-        canvasData,
-        thumbnail,
-        layers: updatedLayers,
-        updatedAt: new Date().toISOString(),
-      };
-
-      setLayers(updatedLayers);
-      setProjects(
-        projects.map((p) => (p.id === currentProject.id ? updatedProject : p)),
-      );
-      setCurrentProject(updatedProject);
-    }, 100); // Small delay to ensure all images are loaded
+    setProjects(
+      projects.map((project) =>
+        project.id === currentProject.id ? updatedProject : project,
+      ),
+    );
+    setCurrentProject(updatedProject);
   };
 
   const handleDeleteProject = (projectId: string) => {
-    const updatedProjects = projects.filter((p) => p.id !== projectId);
+    const updatedProjects = projects.filter(
+      (project) => project.id !== projectId,
+    );
     setProjects(updatedProjects);
 
     if (currentProject && currentProject.id === projectId) {
@@ -388,200 +327,341 @@ const GraphicEditor: React.FC<GraphicEditorProps> = () => {
   };
 
   const handleExportProject = () => {
-    if (!currentProject || !canvasRef.current) return;
+    if (!currentProject) return;
 
-    const canvas = canvasRef.current;
-    const dataUrl = canvas.toDataURL("image/png");
+    // In a real app, this would create an image from the canvas
+    // For this demo, we'll just export the project data as JSON
+    const projectData = JSON.stringify(currentProject, null, 2);
+    const blob = new Blob([projectData], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = dataUrl;
-    a.download = `${currentProject.name}.png`;
+    a.href = url;
+    a.download = `${currentProject.name}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || !activeLayerId) return;
+  const handleAddElement = (type: GraphicElement["type"]) => {
+    if (!currentProject) return;
 
-    // Check if the active layer is locked
-    const activeLayer = layers.find((layer) => layer.id === activeLayerId);
-    if (activeLayer?.locked) return;
+    // Find the first visible and unlocked layer
+    const activeLayer = currentProject.layers.find(
+      (layer) => layer.visible && !layer.locked,
+    );
 
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    setIsDrawing(true);
-    lastPos.current = { x, y };
-
-    // Save current state for undo
-    const currentState = canvas.toDataURL();
-    setUndoStack([...undoStack, currentState]);
-    setRedoStack([]);
-
-    // Get the active brush
-    const activeBrush =
-      brushes.find((brush) => brush.id === activeBrushId) || brushes[0];
-
-    // Start drawing based on selected tool
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.strokeStyle = brushColor;
-      ctx.lineWidth = brushSize[0];
-      ctx.lineCap = activeBrush.type === "square" ? "butt" : "round";
-      ctx.lineJoin = activeBrush.type === "square" ? "miter" : "round";
-
-      // Apply opacity
-      ctx.globalAlpha = brushOpacity[0] / 100;
-
-      // Apply brush hardness (simplified simulation)
-      if (brushHardness[0] < 100 && selectedTool === "pencil") {
-        ctx.shadowBlur = (100 - brushHardness[0]) / 5;
-        ctx.shadowColor = brushColor;
-      } else {
-        ctx.shadowBlur = 0;
-      }
-
-      if (selectedTool === "pencil") {
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-      } else if (selectedTool === "eraser") {
-        ctx.globalCompositeOperation = "destination-out";
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-      } else if (selectedTool === "rectangle" || selectedTool === "circle") {
-        // For shapes, we'll handle in mouseUp
-      }
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !canvasRef.current) return;
-
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      if (selectedTool === "pencil" || selectedTool === "eraser") {
-        ctx.lineTo(x, y);
-        ctx.stroke();
-      }
+    if (!activeLayer) {
+      alert("No active layer available. Please create or unlock a layer.");
+      return;
     }
 
-    lastPos.current = { x, y };
-  };
+    // Calculate center of the visible canvas
+    const canvasCenter = {
+      x: currentProject.width / 2,
+      y: currentProject.height / 2,
+    };
 
-  const handleMouseUp = () => {
-    if (!isDrawing || !canvasRef.current) return;
+    // Create a new element based on the type
+    const newElement: GraphicElement = {
+      id: `element-${Date.now()}`,
+      type,
+      x: canvasCenter.x - 50,
+      y: canvasCenter.y - 50,
+      width: 100,
+      height: 100,
+      fill: fillColor,
+      stroke: strokeColor,
+      strokeWidth: strokeWidth[0],
+      opacity: 1,
+      rotation: 0,
+      layerId: activeLayer.id,
+      zIndex: currentProject.elements.length,
+    };
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-
-    if (ctx) {
-      if (selectedTool === "rectangle") {
-        ctx.strokeStyle = brushColor;
-        ctx.lineWidth = brushSize[0];
-        ctx.strokeRect(
-          lastPos.current.x,
-          lastPos.current.y,
-          lastPos.current.x - lastPos.current.x,
-          lastPos.current.y - lastPos.current.y,
-        );
-      } else if (selectedTool === "circle") {
-        ctx.strokeStyle = brushColor;
-        ctx.lineWidth = brushSize[0];
-        ctx.beginPath();
-        const radius = Math.sqrt(
-          Math.pow(lastPos.current.x - lastPos.current.x, 2) +
-            Math.pow(lastPos.current.y - lastPos.current.y, 2),
-        );
-        ctx.arc(lastPos.current.x, lastPos.current.y, radius, 0, 2 * Math.PI);
-        ctx.stroke();
-      }
-
-      // Reset for next drawing
-      ctx.globalCompositeOperation = "source-over";
-      ctx.closePath();
+    // Customize element based on type
+    if (type === "circle") {
+      newElement.radius = 50;
+      delete newElement.width;
+      delete newElement.height;
+    } else if (type === "triangle") {
+      newElement.points = [
+        { x: canvasCenter.x, y: canvasCenter.y - 50 },
+        { x: canvasCenter.x - 50, y: canvasCenter.y + 50 },
+        { x: canvasCenter.x + 50, y: canvasCenter.y + 50 },
+      ];
+      delete newElement.width;
+      delete newElement.height;
+    } else if (type === "text") {
+      newElement.text = "Двойной клик для редактирования";
+      newElement.fontFamily = fontFamily;
+      newElement.fontSize = fontSize[0];
+      newElement.fontWeight = "normal";
+      newElement.fontStyle = "normal";
+      newElement.textDecoration = "none";
+    } else if (type === "image") {
+      newElement.imageUrl =
+        "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=200&h=200&fit=crop";
     }
 
-    setIsDrawing(false);
+    // Add the new element to the project
+    const updatedElements = [...currentProject.elements, newElement];
+
+    // Add the element ID to the active layer
+    const updatedLayers = currentProject.layers.map((layer) =>
+      layer.id === activeLayer.id
+        ? {
+            ...layer,
+            elements: [...layer.elements, newElement.id],
+          }
+        : layer,
+    );
+
+    const updatedProject = {
+      ...currentProject,
+      elements: updatedElements,
+      layers: updatedLayers,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setProjects(
+      projects.map((project) =>
+        project.id === currentProject.id ? updatedProject : project,
+      ),
+    );
+    setCurrentProject(updatedProject);
+    setSelectedElements([newElement.id]);
   };
 
-  const handleUndo = () => {
-    if (undoStack.length === 0 || !canvasRef.current) return;
+  const handleDeleteElement = () => {
+    if (!currentProject || selectedElements.length === 0) return;
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    // Remove elements from the project
+    const updatedElements = currentProject.elements.filter(
+      (element) => !selectedElements.includes(element.id),
+    );
 
-    // Save current state to redo stack
-    const currentState = canvas.toDataURL();
-    setRedoStack([...redoStack, currentState]);
+    // Remove element IDs from layers
+    const updatedLayers = currentProject.layers.map((layer) => ({
+      ...layer,
+      elements: layer.elements.filter(
+        (elementId) => !selectedElements.includes(elementId),
+      ),
+    }));
 
-    // Pop the last state from undo stack
-    const newUndoStack = [...undoStack];
-    const lastState = newUndoStack.pop();
-    setUndoStack(newUndoStack);
+    const updatedProject = {
+      ...currentProject,
+      elements: updatedElements,
+      layers: updatedLayers,
+      updatedAt: new Date().toISOString(),
+    };
 
-    if (lastState) {
-      const img = new Image();
-      img.onload = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-      };
-      img.src = lastState;
+    setProjects(
+      projects.map((project) =>
+        project.id === currentProject.id ? updatedProject : project,
+      ),
+    );
+    setCurrentProject(updatedProject);
+    setSelectedElements([]);
+  };
+
+  const handleAddLayer = () => {
+    if (!currentProject) return;
+
+    const newLayer: Layer = {
+      id: `layer-${Date.now()}`,
+      name: `Layer ${currentProject.layers.length + 1}`,
+      visible: true,
+      locked: false,
+      opacity: 1,
+      elements: [],
+    };
+
+    const updatedLayers = [...currentProject.layers, newLayer];
+
+    const updatedProject = {
+      ...currentProject,
+      layers: updatedLayers,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setProjects(
+      projects.map((project) =>
+        project.id === currentProject.id ? updatedProject : project,
+      ),
+    );
+    setCurrentProject(updatedProject);
+  };
+
+  const handleToggleLayerVisibility = (layerId: string) => {
+    if (!currentProject) return;
+
+    const updatedLayers = currentProject.layers.map((layer) =>
+      layer.id === layerId ? { ...layer, visible: !layer.visible } : layer,
+    );
+
+    const updatedProject = {
+      ...currentProject,
+      layers: updatedLayers,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setProjects(
+      projects.map((project) =>
+        project.id === currentProject.id ? updatedProject : project,
+      ),
+    );
+    setCurrentProject(updatedProject);
+  };
+
+  const handleToggleLayerLock = (layerId: string) => {
+    if (!currentProject) return;
+
+    const updatedLayers = currentProject.layers.map((layer) =>
+      layer.id === layerId ? { ...layer, locked: !layer.locked } : layer,
+    );
+
+    const updatedProject = {
+      ...currentProject,
+      layers: updatedLayers,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setProjects(
+      projects.map((project) =>
+        project.id === currentProject.id ? updatedProject : project,
+      ),
+    );
+    setCurrentProject(updatedProject);
+  };
+
+  const handleLayerOpacityChange = (layerId: string, opacity: number) => {
+    if (!currentProject) return;
+
+    const updatedLayers = currentProject.layers.map((layer) =>
+      layer.id === layerId ? { ...layer, opacity } : layer,
+    );
+
+    const updatedProject = {
+      ...currentProject,
+      layers: updatedLayers,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setProjects(
+      projects.map((project) =>
+        project.id === currentProject.id ? updatedProject : project,
+      ),
+    );
+    setCurrentProject(updatedProject);
+  };
+
+  const handleMoveLayer = (layerId: string, direction: "up" | "down") => {
+    if (!currentProject) return;
+
+    const layerIndex = currentProject.layers.findIndex(
+      (layer) => layer.id === layerId,
+    );
+    if (layerIndex === -1) return;
+
+    const newIndex =
+      direction === "up"
+        ? Math.min(layerIndex + 1, currentProject.layers.length - 1)
+        : Math.max(layerIndex - 1, 0);
+
+    if (newIndex === layerIndex) return;
+
+    const updatedLayers = [...currentProject.layers];
+    const [movedLayer] = updatedLayers.splice(layerIndex, 1);
+    updatedLayers.splice(newIndex, 0, movedLayer);
+
+    const updatedProject = {
+      ...currentProject,
+      layers: updatedLayers,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setProjects(
+      projects.map((project) =>
+        project.id === currentProject.id ? updatedProject : project,
+      ),
+    );
+    setCurrentProject(updatedProject);
+  };
+
+  const handleRenameLayer = (layerId: string, newName: string) => {
+    if (!currentProject || !newName.trim()) return;
+
+    const updatedLayers = currentProject.layers.map((layer) =>
+      layer.id === layerId ? { ...layer, name: newName } : layer,
+    );
+
+    const updatedProject = {
+      ...currentProject,
+      layers: updatedLayers,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setProjects(
+      projects.map((project) =>
+        project.id === currentProject.id ? updatedProject : project,
+      ),
+    );
+    setCurrentProject(updatedProject);
+  };
+
+  const handleDeleteLayer = (layerId: string) => {
+    if (!currentProject) return;
+
+    // Don't delete the last layer
+    if (currentProject.layers.length <= 1) {
+      alert("Cannot delete the last layer.");
+      return;
     }
+
+    // Get element IDs in this layer
+    const layerToDelete = currentProject.layers.find(
+      (layer) => layer.id === layerId,
+    );
+    if (!layerToDelete) return;
+
+    // Remove elements from the project
+    const updatedElements = currentProject.elements.filter(
+      (element) => !layerToDelete.elements.includes(element.id),
+    );
+
+    // Remove the layer
+    const updatedLayers = currentProject.layers.filter(
+      (layer) => layer.id !== layerId,
+    );
+
+    const updatedProject = {
+      ...currentProject,
+      elements: updatedElements,
+      layers: updatedLayers,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setProjects(
+      projects.map((project) =>
+        project.id === currentProject.id ? updatedProject : project,
+      ),
+    );
+    setCurrentProject(updatedProject);
   };
 
-  const handleRedo = () => {
-    if (redoStack.length === 0 || !canvasRef.current) return;
-
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Save current state to undo stack
-    const currentState = canvas.toDataURL();
-    setUndoStack([...undoStack, currentState]);
-
-    // Pop the last state from redo stack
-    const newRedoStack = [...redoStack];
-    const nextState = newRedoStack.pop();
-    setRedoStack(newRedoStack);
-
-    if (nextState) {
-      const img = new Image();
-      img.onload = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-      };
-      img.src = nextState;
-    }
-  };
-
-  const handleClearCanvas = () => {
-    if (!canvasRef.current) return;
-
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      // Save current state for undo
-      const currentState = canvas.toDataURL();
-      setUndoStack([...undoStack, currentState]);
-      setRedoStack([]);
-
-      // Clear canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
-  };
-
-  const filteredProjects = projects.filter((project) =>
-    project.name.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const filteredProjects = projects.filter((project) => {
+    const matchesName = project.name
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
+    const matchesDescription = project.description
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
+    const matchesTags = project.tags.some((tag) =>
+      tag.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
+    return matchesName || matchesDescription || matchesTags;
+  });
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -629,7 +709,7 @@ const GraphicEditor: React.FC<GraphicEditorProps> = () => {
                       htmlFor="project-name"
                       className="text-sm font-medium"
                     >
-                      Название проекта
+                      Название
                     </label>
                     <Input
                       id="project-name"
@@ -669,7 +749,7 @@ const GraphicEditor: React.FC<GraphicEditorProps> = () => {
                           setNewProjectWidth(parseInt(e.target.value) || 800)
                         }
                         min={100}
-                        max={2000}
+                        max={3000}
                       />
                     </div>
                     <div className="space-y-2">
@@ -687,9 +767,23 @@ const GraphicEditor: React.FC<GraphicEditorProps> = () => {
                           setNewProjectHeight(parseInt(e.target.value) || 600)
                         }
                         min={100}
-                        max={2000}
+                        max={3000}
                       />
                     </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="project-tags"
+                      className="text-sm font-medium"
+                    >
+                      Теги (через запятую)
+                    </label>
+                    <Input
+                      id="project-tags"
+                      value={newProjectTags}
+                      onChange={(e) => setNewProjectTags(e.target.value)}
+                      placeholder="графика, дизайн, логотип"
+                    />
                   </div>
                 </div>
                 <DialogFooter>
@@ -707,7 +801,7 @@ const GraphicEditor: React.FC<GraphicEditorProps> = () => {
         </div>
 
         <ScrollArea className="flex-1">
-          <div className="p-2 space-y-2">
+          <div className="p-2 space-y-1">
             {filteredProjects.map((project) => (
               <div
                 key={project.id}
@@ -716,7 +810,7 @@ const GraphicEditor: React.FC<GraphicEditorProps> = () => {
               >
                 <div className="flex justify-between items-center">
                   <div className="flex items-center">
-                    <Image className="h-4 w-4 mr-2 text-blue-500" />
+                    <Palette className="h-4 w-4 mr-2 text-blue-500" />
                     <span className="text-sm font-medium truncate">
                       {project.name}
                     </span>
@@ -743,15 +837,25 @@ const GraphicEditor: React.FC<GraphicEditorProps> = () => {
                   </DropdownMenu>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {project.width} x {project.height} px
+                  {formatDate(project.updatedAt)}
                 </p>
-                {project.thumbnail && (
-                  <div className="mt-2 rounded overflow-hidden border border-border">
-                    <img
-                      src={project.thumbnail}
-                      alt={project.name}
-                      className="w-full h-auto"
-                    />
+                <div className="flex items-center text-xs text-muted-foreground mt-1">
+                  <span>
+                    {project.width} × {project.height}px
+                  </span>
+                  <span className="mx-1">•</span>
+                  <span>{project.layers.length} слоев</span>
+                </div>
+                {project.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {project.tags.map((tag, index) => (
+                      <span
+                        key={index}
+                        className="text-xs bg-accent/50 text-accent-foreground px-1.5 py-0.5 rounded"
+                      >
+                        {tag}
+                      </span>
+                    ))}
                   </div>
                 )}
               </div>
@@ -783,908 +887,696 @@ const GraphicEditor: React.FC<GraphicEditorProps> = () => {
               <div>
                 <h2 className="font-semibold">{currentProject.name}</h2>
                 <p className="text-xs text-muted-foreground">
-                  {currentProject.width} x {currentProject.height} px •
-                  Последнее обновление: {formatDate(currentProject.updatedAt)}
+                  {currentProject.width} × {currentProject.height}px • Последнее
+                  обновление: {formatDate(currentProject.updatedAt)}
                 </p>
               </div>
 
               <div className="flex items-center space-x-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <Upload className="h-4 w-4 mr-2" />
-                      Импорт/Экспорт
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={handleExportProject}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Экспорт как PNG
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setIsImportingProject(true)}
-                    >
-                      <Upload className="h-4 w-4 mr-2" />
-                      Импорт изображения
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <GitBranch className="h-4 w-4 mr-2" />
-                      Загрузить с GitHub
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
                 <Button variant="outline" size="sm" onClick={handleSaveProject}>
                   <Save className="h-4 w-4 mr-2" />
                   Сохранить
                 </Button>
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <Settings className="h-4 w-4 mr-2" />
-                      Настройки
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem>
-                      <User className="h-4 w-4 mr-2" />
-                      Профиль пользователя
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Share2 className="h-4 w-4 mr-2" />
-                      Поделиться проектом
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setIsCollaborationPanelOpen(true)}
-                    >
-                      <Users className="h-4 w-4 mr-2" />
-                      Совместное редактирование
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Lock className="h-4 w-4 mr-2" />
-                      {currentProject?.isPublic
-                        ? "Сделать приватным"
-                        : "Сделать публичным"}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-
-              {/* Import dialog */}
-              {isImportingProject && (
-                <Dialog
-                  open={isImportingProject}
-                  onOpenChange={setIsImportingProject}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportProject}
                 >
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Импорт изображения</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div className="space-y-2">
-                        <label
-                          htmlFor="import-url"
-                          className="text-sm font-medium"
-                        >
-                          URL изображения
-                        </label>
-                        <Input
-                          id="import-url"
-                          value={importUrl}
-                          onChange={(e) => setImportUrl(e.target.value)}
-                          placeholder="https://example.com/image.jpg"
-                        />
-                      </div>
-                      <div className="text-center">
-                        <p className="text-sm text-muted-foreground">или</p>
-                      </div>
-                      <div className="space-y-2">
-                        <label
-                          htmlFor="import-file"
-                          className="text-sm font-medium"
-                        >
-                          Загрузить с компьютера
-                        </label>
-                        <Input
-                          id="import-file"
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => {
-                            // Handle file upload
-                            const file = e.target.files?.[0];
-                            if (file && currentProject && canvasRef.current) {
-                              const reader = new FileReader();
-                              reader.onload = (event) => {
-                                const img = new Image();
-                                img.onload = () => {
-                                  const canvas = canvasRef.current;
-                                  if (canvas) {
-                                    const ctx = canvas.getContext("2d");
-                                    if (ctx) {
-                                      ctx.clearRect(
-                                        0,
-                                        0,
-                                        canvas.width,
-                                        canvas.height,
-                                      );
-                                      ctx.drawImage(
-                                        img,
-                                        0,
-                                        0,
-                                        canvas.width,
-                                        canvas.height,
-                                      );
+                  <Download className="h-4 w-4 mr-2" />
+                  Экспорт
+                </Button>
 
-                                      // Update active layer
-                                      if (activeLayerId) {
-                                        const updatedLayers = layers.map(
-                                          (layer) => {
-                                            if (layer.id === activeLayerId) {
-                                              return {
-                                                ...layer,
-                                                data: canvas.toDataURL(
-                                                  "image/png",
-                                                ),
-                                              };
-                                            }
-                                            return layer;
-                                          },
-                                        );
-                                        setLayers(updatedLayers);
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsCollaborationPanelOpen(true)}
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Совместная работа
+                </Button>
 
-                                        // Update project
-                                        const updatedProject = {
-                                          ...currentProject,
-                                          layers: updatedLayers,
-                                        };
-                                        setCurrentProject(updatedProject);
-                                        setProjects(
-                                          projects.map((p) =>
-                                            p.id === currentProject.id
-                                              ? updatedProject
-                                              : p,
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  }
-                                };
-                                img.src = event.target?.result as string;
-                              };
-                              reader.readAsDataURL(file);
-                              setIsImportingProject(false);
-                            }
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsImportingProject(false)}
-                      >
-                        Отмена
-                      </Button>
-                      <Button
-                        onClick={() => {
-                          // Import from URL
-                          if (
-                            importUrl &&
-                            currentProject &&
-                            canvasRef.current
-                          ) {
-                            const img = new Image();
-                            img.crossOrigin = "anonymous";
-                            img.onload = () => {
-                              const canvas = canvasRef.current;
-                              if (canvas) {
-                                const ctx = canvas.getContext("2d");
-                                if (ctx) {
-                                  ctx.clearRect(
-                                    0,
-                                    0,
-                                    canvas.width,
-                                    canvas.height,
-                                  );
-                                  ctx.drawImage(
-                                    img,
-                                    0,
-                                    0,
-                                    canvas.width,
-                                    canvas.height,
-                                  );
-
-                                  // Update active layer
-                                  if (activeLayerId) {
-                                    const updatedLayers = layers.map(
-                                      (layer) => {
-                                        if (layer.id === activeLayerId) {
-                                          return {
-                                            ...layer,
-                                            data: canvas.toDataURL("image/png"),
-                                          };
-                                        }
-                                        return layer;
-                                      },
-                                    );
-                                    setLayers(updatedLayers);
-
-                                    // Update project
-                                    const updatedProject = {
-                                      ...currentProject,
-                                      layers: updatedLayers,
-                                    };
-                                    setCurrentProject(updatedProject);
-                                    setProjects(
-                                      projects.map((p) =>
-                                        p.id === currentProject.id
-                                          ? updatedProject
-                                          : p,
-                                      ),
-                                    );
-                                  }
-                                }
-                              }
-                            };
-                            img.onerror = () => {
-                              alert(
-                                "Не удалось загрузить изображение по указанному URL",
-                              );
-                            };
-                            img.src = importUrl;
-                            setIsImportingProject(false);
-                            setImportUrl("");
-                          }
-                        }}
-                        disabled={!importUrl}
-                      >
-                        Импортировать
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsFullScreen(!isFullScreen)}
+                >
+                  {isFullScreen ? (
+                    <>
+                      <Minimize2 className="h-4 w-4 mr-2" />
+                      Выйти из полноэкранного режима
+                    </>
+                  ) : (
+                    <>
+                      <Maximize2 className="h-4 w-4 mr-2" />
+                      Полноэкранный режим
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
 
-            {/* Toolbar */}
-            <div className="p-2 border-b border-border flex items-center justify-between">
-              <div className="flex items-center space-x-1">
-                <Button
-                  variant={selectedTool === "pencil" ? "default" : "outline"}
-                  size="icon"
-                  onClick={() => setSelectedTool("pencil")}
-                  title="Карандаш"
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={selectedTool === "eraser" ? "default" : "outline"}
-                  size="icon"
-                  onClick={() => setSelectedTool("eraser")}
-                  title="Ластик"
-                >
-                  <Eraser className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={selectedTool === "rectangle" ? "default" : "outline"}
-                  size="icon"
-                  onClick={() => setSelectedTool("rectangle")}
-                  title="Прямоугольник"
-                >
-                  <Square className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={selectedTool === "circle" ? "default" : "outline"}
-                  size="icon"
-                  onClick={() => setSelectedTool("circle")}
-                  title="Круг"
-                >
-                  <Circle className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={selectedTool === "text" ? "default" : "outline"}
-                  size="icon"
-                  onClick={() => setSelectedTool("text")}
-                  title="Текст"
-                >
-                  <Type className="h-4 w-4" />
-                </Button>
-                <Separator orientation="vertical" className="h-6 mx-1" />
-
-                {/* Brush selector */}
+            {/* Main toolbar */}
+            <div className="border-b border-border">
+              <div className="p-2 flex items-center space-x-1 flex-wrap">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex items-center"
-                    >
-                      <Palette className="h-4 w-4 mr-1" />
-                      Кисти
+                    <Button variant="ghost" size="sm" className="h-8">
+                      <File className="h-4 w-4 mr-1" />
+                      Файл
+                      <ChevronDown className="h-3 w-3 ml-1" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
-                    {brushes.map((brush) => (
-                      <DropdownMenuItem
-                        key={brush.id}
-                        onClick={() => {
-                          setActiveBrushId(brush.id);
-                          setBrushSize([brush.size]);
-                          setBrushOpacity([brush.opacity]);
-                          setBrushHardness([brush.hardness]);
-                        }}
-                        className={
-                          activeBrushId === brush.id ? "bg-accent" : ""
-                        }
-                      >
-                        <div className="flex items-center">
-                          <div
-                            className={`w-4 h-4 mr-2 rounded-full ${brush.type === "square" ? "rounded-sm" : "rounded-full"}`}
-                            style={{ backgroundColor: brush.color }}
-                          />
-                          {brush.name}
-                        </div>
-                      </DropdownMenuItem>
-                    ))}
                     <DropdownMenuItem
-                      onClick={() => setShowBrushesPanel(!showBrushesPanel)}
+                      onClick={() => setIsCreatingProject(true)}
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Управление кистями
+                      Новый проект
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleSaveProject}>
+                      <Save className="h-4 w-4 mr-2" />
+                      Сохранить
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportProject}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Экспорт
+                    </DropdownMenuItem>
+                    <DropdownMenuItem>
+                      <Share2 className="h-4 w-4 mr-2" />
+                      Поделиться
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                <div className="flex items-center space-x-2">
-                  <label
-                    htmlFor="brush-color"
-                    className="text-xs text-muted-foreground"
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-8">
+                      <Edit className="h-4 w-4 mr-1" />
+                      Правка
+                      <ChevronDown className="h-3 w-3 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem>
+                      <Undo className="h-4 w-4 mr-2" />
+                      Отменить
+                    </DropdownMenuItem>
+                    <DropdownMenuItem>
+                      <Redo className="h-4 w-4 mr-2" />
+                      Повторить
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem>
+                      <Copy className="h-4 w-4 mr-2" />
+                      Копировать
+                    </DropdownMenuItem>
+                    <DropdownMenuItem>
+                      <Scissors className="h-4 w-4 mr-2" />
+                      Вырезать
+                    </DropdownMenuItem>
+                    <DropdownMenuItem>
+                      <Clipboard className="h-4 w-4 mr-2" />
+                      Вставить
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleDeleteElement}>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Удалить
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-8">
+                      <Eye className="h-4 w-4 mr-1" />
+                      Вид
+                      <ChevronDown className="h-3 w-3 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onClick={() => setShowGrid(!showGrid)}>
+                      <Grid className="h-4 w-4 mr-2" />
+                      {showGrid ? "Скрыть сетку" : "Показать сетку"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setShowRulers(!showRulers)}
+                    >
+                      <Ruler className="h-4 w-4 mr-2" />
+                      {showRulers ? "Скрыть линейки" : "Показать линейки"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setSnapToGrid(!snapToGrid)}
+                    >
+                      <Magnet className="h-4 w-4 mr-2" />
+                      {snapToGrid
+                        ? "Отключить привязку к сетке"
+                        : "Включить привязку к сетке"}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => setZoom([Math.max(0.25, zoom[0] - 0.25)])}
+                    >
+                      <ZoomOut className="h-4 w-4 mr-2" />
+                      Уменьшить
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setZoom([Math.min(3, zoom[0] + 0.25)])}
+                    >
+                      <ZoomIn className="h-4 w-4 mr-2" />
+                      Увеличить
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setZoom([1])}>
+                      <Maximize className="h-4 w-4 mr-2" />
+                      Сбросить масштаб (100%)
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => setIsFullScreen(!isFullScreen)}
+                    >
+                      {isFullScreen ? (
+                        <>
+                          <Minimize2 className="h-4 w-4 mr-2" />
+                          Выйти из полноэкранного режима
+                        </>
+                      ) : (
+                        <>
+                          <Maximize2 className="h-4 w-4 mr-2" />
+                          Полноэкранный режим
+                        </>
+                      )}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-8">
+                      <Layers className="h-4 w-4 mr-1" />
+                      Слои
+                      <ChevronDown className="h-3 w-3 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onClick={handleAddLayer}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Добавить слой
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem>
+                      <Group className="h-4 w-4 mr-2" />
+                      Группировать слои
+                    </DropdownMenuItem>
+                    <DropdownMenuItem>
+                      <Ungroup className="h-4 w-4 mr-2" />
+                      Разгруппировать слои
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem>
+                      <ArrowUp className="h-4 w-4 mr-2" />
+                      Переместить вверх
+                    </DropdownMenuItem>
+                    <DropdownMenuItem>
+                      <ArrowDown className="h-4 w-4 mr-2" />
+                      Переместить вниз
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <Separator orientation="vertical" className="h-8 mx-2" />
+
+                <div className="flex items-center space-x-1">
+                  <Button
+                    variant={currentTool === "select" ? "default" : "ghost"}
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentTool("select")}
+                    title="Выделение"
                   >
-                    Цвет:
-                  </label>
-                  <input
-                    id="brush-color"
-                    type="color"
-                    value={brushColor}
-                    onChange={(e) => setBrushColor(e.target.value)}
-                    className="w-8 h-8 rounded cursor-pointer"
-                  />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <label
-                    htmlFor="brush-size"
-                    className="text-xs text-muted-foreground"
+                    <MousePointer className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={currentTool === "move" ? "default" : "ghost"}
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentTool("move")}
+                    title="Перемещение"
                   >
-                    Размер:
-                  </label>
-                  <Slider
-                    id="brush-size"
-                    value={brushSize}
-                    onValueChange={setBrushSize}
-                    min={1}
-                    max={50}
-                    step={1}
-                    className="w-24"
-                  />
-                  <span className="text-xs">{brushSize[0]}px</span>
+                    <Move className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={currentTool === "rectangle" ? "default" : "ghost"}
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentTool("rectangle")}
+                    title="Прямоугольник"
+                  >
+                    <Square className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={currentTool === "circle" ? "default" : "ghost"}
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentTool("circle")}
+                    title="Круг"
+                  >
+                    <Circle className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={currentTool === "triangle" ? "default" : "ghost"}
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentTool("triangle")}
+                    title="Треугольник"
+                  >
+                    <Triangle className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={currentTool === "pen" ? "default" : "ghost"}
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentTool("pen")}
+                    title="Перо"
+                  >
+                    <PenTool className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={currentTool === "text" ? "default" : "ghost"}
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentTool("text")}
+                    title="Текст"
+                  >
+                    <Type className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={currentTool === "image" ? "default" : "ghost"}
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentTool("image")}
+                    title="Изображение"
+                  >
+                    <Image className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={currentTool === "eraser" ? "default" : "ghost"}
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentTool("eraser")}
+                    title="Ластик"
+                  >
+                    <Eraser className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={currentTool === "pipette" ? "default" : "ghost"}
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentTool("pipette")}
+                    title="Пипетка"
+                  >
+                    <Pipette className="h-4 w-4" />
+                  </Button>
                 </div>
 
-                <div className="flex items-center space-x-2">
-                  <label
-                    htmlFor="brush-opacity"
-                    className="text-xs text-muted-foreground"
-                  >
-                    Прозрачность:
-                  </label>
-                  <Slider
-                    id="brush-opacity"
-                    value={brushOpacity}
-                    onValueChange={setBrushOpacity}
-                    min={1}
-                    max={100}
-                    step={1}
-                    className="w-24"
-                  />
-                  <span className="text-xs">{brushOpacity[0]}%</span>
-                </div>
+                <Separator orientation="vertical" className="h-8 mx-2" />
 
                 <div className="flex items-center space-x-2">
-                  <label
-                    htmlFor="brush-hardness"
-                    className="text-xs text-muted-foreground"
-                  >
-                    Жесткость:
-                  </label>
-                  <Slider
-                    id="brush-hardness"
-                    value={brushHardness}
-                    onValueChange={setBrushHardness}
-                    min={0}
-                    max={100}
-                    step={1}
-                    className="w-24"
-                  />
-                  <span className="text-xs">{brushHardness[0]}%</span>
+                  <div className="flex flex-col">
+                    <label className="text-xs text-muted-foreground">
+                      Заливка
+                    </label>
+                    <div className="flex items-center space-x-1">
+                      <div
+                        className="w-6 h-6 rounded border border-border cursor-pointer"
+                        style={{ backgroundColor: fillColor }}
+                        onClick={() => {
+                          // Open color picker
+                        }}
+                      />
+                      <Input
+                        type="text"
+                        value={fillColor}
+                        onChange={(e) => setFillColor(e.target.value)}
+                        className="w-20 h-6 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col">
+                    <label className="text-xs text-muted-foreground">
+                      Обводка
+                    </label>
+                    <div className="flex items-center space-x-1">
+                      <div
+                        className="w-6 h-6 rounded border border-border cursor-pointer"
+                        style={{ backgroundColor: strokeColor }}
+                        onClick={() => {
+                          // Open color picker
+                        }}
+                      />
+                      <Input
+                        type="text"
+                        value={strokeColor}
+                        onChange={(e) => setStrokeColor(e.target.value)}
+                        className="w-20 h-6 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col">
+                    <label className="text-xs text-muted-foreground">
+                      Толщина
+                    </label>
+                    <Slider
+                      value={strokeWidth}
+                      min={1}
+                      max={20}
+                      step={1}
+                      onValueChange={setStrokeWidth}
+                      className="w-24"
+                    />
+                  </div>
                 </div>
-              </div>
-
-              <div className="flex items-center space-x-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowLayersPanel(!showLayersPanel)}
-                  className="flex items-center"
-                >
-                  <Layers className="h-4 w-4 mr-1" />
-                  Слои
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleUndo}
-                  disabled={undoStack.length === 0}
-                  title="Отменить"
-                >
-                  <Undo className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleRedo}
-                  disabled={redoStack.length === 0}
-                  title="Повторить"
-                >
-                  <Redo className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleClearCanvas}
-                  title="Очистить холст"
-                >
-                  Очистить
-                </Button>
               </div>
             </div>
 
             {/* Canvas area with layers panel */}
-            <div className="flex-1 overflow-auto flex bg-gray-100 dark:bg-gray-800">
+            <div
+              className={`flex-1 overflow-auto flex bg-gray-100 dark:bg-gray-800 ${isFullScreen ? "fixed inset-0 z-50" : ""}`}
+            >
+              {isFullScreen && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="absolute top-4 right-4 z-50"
+                  onClick={() => setIsFullScreen(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
               {/* Layers panel */}
-              {showLayersPanel && (
-                <div className="w-64 bg-background border-r border-border">
-                  <div className="p-2 border-b border-border flex justify-between items-center">
-                    <h3 className="text-sm font-medium">Слои</h3>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={() => {
-                        // Add new layer
-                        if (!currentProject) return;
-
-                        const newLayer: Layer = {
-                          id: Date.now().toString(),
-                          name: `Слой ${layers.length + 1}`,
-                          visible: true,
-                          locked: false,
-                          opacity: 100,
-                          data: "",
-                          zIndex: layers.length,
-                        };
-
-                        const updatedLayers = [...layers, newLayer];
-                        setLayers(updatedLayers);
-                        setActiveLayerId(newLayer.id);
-
-                        // Update project
-                        const updatedProject = {
-                          ...currentProject,
-                          layers: updatedLayers,
-                        };
-                        setCurrentProject(updatedProject);
-                        setProjects(
-                          projects.map((p) =>
-                            p.id === currentProject.id ? updatedProject : p,
-                          ),
-                        );
-                      }}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-
-                  <ScrollArea className="h-[calc(100%-36px)]">
-                    <div className="p-2 space-y-1">
-                      {layers
-                        .sort((a, b) => b.zIndex - a.zIndex)
-                        .map((layer) => (
-                          <div
-                            key={layer.id}
-                            className={`p-2 rounded-md ${activeLayerId === layer.id ? "bg-accent" : "hover:bg-accent/50"} ${!layer.visible ? "opacity-50" : ""}`}
-                            onClick={() => setActiveLayerId(layer.id)}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center">
+              <div className="w-64 bg-background border-r border-border">
+                <div className="p-2 border-b border-border flex justify-between items-center">
+                  <h3 className="text-sm font-medium">Слои</h3>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={handleAddLayer}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
+                <ScrollArea className="h-[calc(100%-36px)]">
+                  <div className="p-2 space-y-1">
+                    {currentProject.layers.map((layer, index) => (
+                      <div
+                        key={layer.id}
+                        className="p-2 rounded-md border border-border bg-card hover:bg-accent/50"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5"
+                              onClick={() =>
+                                handleToggleLayerVisibility(layer.id)
+                              }
+                            >
+                              {layer.visible ? (
+                                <Eye className="h-3 w-3" />
+                              ) : (
+                                <EyeOff className="h-3 w-3" />
+                              )}
+                            </Button>
+                            <span className="text-sm">{layer.name}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5"
+                              onClick={() => handleToggleLayerLock(layer.id)}
+                            >
+                              {layer.locked ? (
+                                <Lock className="h-3 w-3" />
+                              ) : (
+                                <Unlock className="h-3 w-3" />
+                              )}
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-6 w-6 mr-1"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    // Toggle visibility
-                                    const updatedLayers = layers.map((l) => {
-                                      if (l.id === layer.id) {
-                                        return { ...l, visible: !l.visible };
-                                      }
-                                      return l;
-                                    });
-                                    setLayers(updatedLayers);
-
-                                    // Update project
-                                    if (currentProject) {
-                                      const updatedProject = {
-                                        ...currentProject,
-                                        layers: updatedLayers,
-                                      };
-                                      setCurrentProject(updatedProject);
-                                      setProjects(
-                                        projects.map((p) =>
-                                          p.id === currentProject.id
-                                            ? updatedProject
-                                            : p,
-                                        ),
-                                      );
+                                  className="h-5 w-5"
+                                >
+                                  <MoreVertical className="h-3 w-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    handleMoveLayer(layer.id, "up")
+                                  }
+                                >
+                                  <ArrowUp className="h-4 w-4 mr-2" />
+                                  Переместить вверх
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    handleMoveLayer(layer.id, "down")
+                                  }
+                                >
+                                  <ArrowDown className="h-4 w-4 mr-2" />
+                                  Переместить вниз
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    const newName = prompt(
+                                      "Введите новое имя слоя:",
+                                      layer.name,
+                                    );
+                                    if (newName) {
+                                      handleRenameLayer(layer.id, newName);
                                     }
                                   }}
                                 >
-                                  {layer.visible ? (
-                                    <Eye className="h-3 w-3" />
-                                  ) : (
-                                    <EyeOff className="h-3 w-3" />
-                                  )}
-                                </Button>
-                                <span className="text-sm truncate">
-                                  {layer.name}
-                                </span>
-                              </div>
-
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <Settings className="h-3 w-3" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      // Toggle lock
-                                      const updatedLayers = layers.map((l) => {
-                                        if (l.id === layer.id) {
-                                          return { ...l, locked: !l.locked };
-                                        }
-                                        return l;
-                                      });
-                                      setLayers(updatedLayers);
-
-                                      // Update project
-                                      if (currentProject) {
-                                        const updatedProject = {
-                                          ...currentProject,
-                                          layers: updatedLayers,
-                                        };
-                                        setCurrentProject(updatedProject);
-                                        setProjects(
-                                          projects.map((p) =>
-                                            p.id === currentProject.id
-                                              ? updatedProject
-                                              : p,
-                                          ),
-                                        );
-                                      }
-                                    }}
-                                  >
-                                    {layer.locked
-                                      ? "Разблокировать"
-                                      : "Заблокировать"}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      // Move layer up
-                                      if (layer.zIndex < layers.length - 1) {
-                                        const updatedLayers = layers.map(
-                                          (l) => {
-                                            if (l.id === layer.id) {
-                                              return {
-                                                ...l,
-                                                zIndex: l.zIndex + 1,
-                                              };
-                                            } else if (
-                                              l.zIndex ===
-                                              layer.zIndex + 1
-                                            ) {
-                                              return {
-                                                ...l,
-                                                zIndex: l.zIndex - 1,
-                                              };
-                                            }
-                                            return l;
-                                          },
-                                        );
-                                        setLayers(updatedLayers);
-
-                                        // Update project
-                                        if (currentProject) {
-                                          const updatedProject = {
-                                            ...currentProject,
-                                            layers: updatedLayers,
-                                          };
-                                          setCurrentProject(updatedProject);
-                                          setProjects(
-                                            projects.map((p) =>
-                                              p.id === currentProject.id
-                                                ? updatedProject
-                                                : p,
-                                            ),
-                                          );
-                                        }
-                                      }
-                                    }}
-                                  >
-                                    Переместить выше
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      // Move layer down
-                                      if (layer.zIndex > 0) {
-                                        const updatedLayers = layers.map(
-                                          (l) => {
-                                            if (l.id === layer.id) {
-                                              return {
-                                                ...l,
-                                                zIndex: l.zIndex - 1,
-                                              };
-                                            } else if (
-                                              l.zIndex ===
-                                              layer.zIndex - 1
-                                            ) {
-                                              return {
-                                                ...l,
-                                                zIndex: l.zIndex + 1,
-                                              };
-                                            }
-                                            return l;
-                                          },
-                                        );
-                                        setLayers(updatedLayers);
-
-                                        // Update project
-                                        if (currentProject) {
-                                          const updatedProject = {
-                                            ...currentProject,
-                                            layers: updatedLayers,
-                                          };
-                                          setCurrentProject(updatedProject);
-                                          setProjects(
-                                            projects.map((p) =>
-                                              p.id === currentProject.id
-                                                ? updatedProject
-                                                : p,
-                                            ),
-                                          );
-                                        }
-                                      }
-                                    }}
-                                  >
-                                    Переместить ниже
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      // Delete layer (if not the only one)
-                                      if (layers.length > 1) {
-                                        const updatedLayers = layers.filter(
-                                          (l) => l.id !== layer.id,
-                                        );
-                                        setLayers(updatedLayers);
-
-                                        // Set active layer to the first one if deleting active layer
-                                        if (activeLayerId === layer.id) {
-                                          setActiveLayerId(updatedLayers[0].id);
-                                        }
-
-                                        // Update project
-                                        if (currentProject) {
-                                          const updatedProject = {
-                                            ...currentProject,
-                                            layers: updatedLayers,
-                                          };
-                                          setCurrentProject(updatedProject);
-                                          setProjects(
-                                            projects.map((p) =>
-                                              p.id === currentProject.id
-                                                ? updatedProject
-                                                : p,
-                                            ),
-                                          );
-                                        }
-                                      }
-                                    }}
-                                    className="text-red-500"
-                                  >
-                                    Удалить слой
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-
-                            {/* Layer opacity slider */}
-                            <div className="mt-1 flex items-center">
-                              <span className="text-xs mr-2 w-16">
-                                Прозрачность:
-                              </span>
-                              <Slider
-                                value={[layer.opacity]}
-                                onValueChange={(value) => {
-                                  // Update layer opacity
-                                  const updatedLayers = layers.map((l) => {
-                                    if (l.id === layer.id) {
-                                      return { ...l, opacity: value[0] };
-                                    }
-                                    return l;
-                                  });
-                                  setLayers(updatedLayers);
-
-                                  // Update project
-                                  if (currentProject) {
-                                    const updatedProject = {
-                                      ...currentProject,
-                                      layers: updatedLayers,
-                                    };
-                                    setCurrentProject(updatedProject);
-                                    setProjects(
-                                      projects.map((p) =>
-                                        p.id === currentProject.id
-                                          ? updatedProject
-                                          : p,
-                                      ),
-                                    );
-                                  }
-                                }}
-                                min={0}
-                                max={100}
-                                step={1}
-                                className="w-24"
-                              />
-                              <span className="text-xs ml-2">
-                                {layer.opacity}%
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  </ScrollArea>
-                </div>
-              )}
-
-              {/* Brushes panel */}
-              {showBrushesPanel && (
-                <div className="absolute right-4 top-20 w-80 bg-background border border-border rounded-md shadow-lg z-10">
-                  <div className="p-2 border-b border-border flex justify-between items-center">
-                    <h3 className="text-sm font-medium">Управление кистями</h3>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={() => setShowBrushesPanel(false)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-
-                  <div className="p-4 space-y-4">
-                    <div className="space-y-2">
-                      <h4 className="text-sm font-medium">Доступные кисти</h4>
-                      {brushes.map((brush) => (
-                        <div
-                          key={brush.id}
-                          className={`p-2 rounded-md ${activeBrushId === brush.id ? "bg-accent" : "hover:bg-accent/50"}`}
-                          onClick={() => {
-                            setActiveBrushId(brush.id);
-                            setBrushSize([brush.size]);
-                            setBrushOpacity([brush.opacity]);
-                            setBrushHardness([brush.hardness]);
-                            setBrushColor(brush.color);
-                          }}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              <div
-                                className={`w-6 h-6 mr-2 ${brush.type === "square" ? "rounded-sm" : "rounded-full"}`}
-                                style={{ backgroundColor: brush.color }}
-                              />
-                              <span>{brush.name}</span>
-                            </div>
-
-                            <div className="text-xs text-muted-foreground">
-                              {brush.size}px, {brush.opacity}%
-                            </div>
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Переименовать
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleDeleteLayer(layer.id)}
+                                  className="text-red-500"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Удалить
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </div>
-                      ))}
-                    </div>
-
-                    <Separator />
-
-                    <div className="space-y-2">
-                      <h4 className="text-sm font-medium">
-                        Сохранить текущую кисть
-                      </h4>
-                      <Input
-                        placeholder="Название кисти"
-                        className="mb-2"
-                        value={
-                          activeBrushId
-                            ? brushes.find((b) => b.id === activeBrushId)
-                                ?.name || ""
-                            : ""
-                        }
-                        onChange={(e) => {
-                          // Update brush name
-                          if (activeBrushId) {
-                            const updatedBrushes = brushes.map((b) => {
-                              if (b.id === activeBrushId) {
-                                return { ...b, name: e.target.value };
-                              }
-                              return b;
-                            });
-                            setBrushes(updatedBrushes);
-                          }
-                        }}
-                      />
-                      <Button
-                        className="w-full"
-                        onClick={() => {
-                          // Save current brush settings as a new brush
-                          const newBrush: Brush = {
-                            id: Date.now().toString(),
-                            name: `Новая кисть ${brushes.length + 1}`,
-                            size: brushSize[0],
-                            opacity: brushOpacity[0],
-                            hardness: brushHardness[0],
-                            color: brushColor,
-                            type: "round",
-                          };
-
-                          setBrushes([...brushes, newBrush]);
-                          setActiveBrushId(newBrush.id);
-                        }}
-                      >
-                        Сохранить как новую кисть
-                      </Button>
-                    </div>
+                        <div className="mt-1">
+                          <label className="text-xs text-muted-foreground">
+                            Прозрачность: {Math.round(layer.opacity * 100)}%
+                          </label>
+                          <Slider
+                            value={[layer.opacity]}
+                            min={0}
+                            max={1}
+                            step={0.01}
+                            onValueChange={(value) =>
+                              handleLayerOpacityChange(layer.id, value[0])
+                            }
+                          />
+                        </div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {layer.elements.length} элементов
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              )}
+                </ScrollArea>
+              </div>
 
               {/* Canvas */}
-              <div className="flex-1 p-4 flex items-center justify-center">
-                <div className="relative bg-white shadow-md">
-                  <canvas
+              <div className="flex-1 relative overflow-auto">
+                {/* Rulers */}
+                {showRulers && (
+                  <>
+                    <div className="absolute top-0 left-0 w-full h-6 bg-background border-b border-border z-10">
+                      {/* Horizontal ruler */}
+                    </div>
+                    <div className="absolute top-0 left-0 w-6 h-full bg-background border-r border-border z-10">
+                      {/* Vertical ruler */}
+                    </div>
+                    <div className="absolute top-0 left-0 w-6 h-6 bg-background border-r border-b border-border z-20">
+                      {/* Ruler corner */}
+                    </div>
+                  </>
+                )}
+
+                {/* Canvas content */}
+                <div
+                  className="relative"
+                  style={{
+                    marginTop: showRulers ? "1.5rem" : 0,
+                    marginLeft: showRulers ? "1.5rem" : 0,
+                    padding: "2rem",
+                  }}
+                >
+                  <div
                     ref={canvasRef}
-                    width={currentProject.width}
-                    height={currentProject.height}
-                    onMouseDown={handleMouseDown}
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                    onMouseLeave={handleMouseUp}
-                    className="cursor-crosshair"
-                  />
+                    className="relative bg-white shadow-md"
+                    style={{
+                      width: currentProject.width,
+                      height: currentProject.height,
+                      transform: `scale(${zoom[0]})`,
+                      transformOrigin: "0 0",
+                    }}
+                  >
+                    {/* Grid */}
+                    {showGrid && (
+                      <div
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                          backgroundImage:
+                            "linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px)",
+                          backgroundSize: `${gridSize}px ${gridSize}px`,
+                        }}
+                      />
+                    )}
+
+                    {/* Render elements */}
+                    {currentProject.layers.map((layer) => {
+                      if (!layer.visible) return null;
+
+                      // Get elements for this layer
+                      const layerElements = currentProject.elements.filter(
+                        (element) => element.layerId === layer.id,
+                      );
+
+                      return layerElements.map((element) => {
+                        // Determine if element is selected
+                        const isSelected = selectedElements.includes(
+                          element.id,
+                        );
+
+                        // Render element based on type
+                        let elementJsx;
+
+                        switch (element.type) {
+                          case "rect":
+                            elementJsx = (
+                              <div
+                                className={`absolute ${isSelected ? "ring-2 ring-blue-500" : ""}`}
+                                style={{
+                                  left: element.x,
+                                  top: element.y,
+                                  width: element.width,
+                                  height: element.height,
+                                  backgroundColor: element.fill,
+                                  border: `${element.strokeWidth}px solid ${element.stroke}`,
+                                  opacity: element.opacity * layer.opacity,
+                                  transform: `rotate(${element.rotation}deg)`,
+                                  pointerEvents: layer.locked ? "none" : "auto",
+                                }}
+                                onClick={() =>
+                                  setSelectedElements([element.id])
+                                }
+                              />
+                            );
+                            break;
+
+                          case "circle":
+                            elementJsx = (
+                              <div
+                                className={`absolute rounded-full ${isSelected ? "ring-2 ring-blue-500" : ""}`}
+                                style={{
+                                  left: element.x - element.radius,
+                                  top: element.y - element.radius,
+                                  width: element.radius * 2,
+                                  height: element.radius * 2,
+                                  backgroundColor: element.fill,
+                                  border: `${element.strokeWidth}px solid ${element.stroke}`,
+                                  opacity: element.opacity * layer.opacity,
+                                  transform: `rotate(${element.rotation}deg)`,
+                                  pointerEvents: layer.locked ? "none" : "auto",
+                                }}
+                                onClick={() =>
+                                  setSelectedElements([element.id])
+                                }
+                              />
+                            );
+                            break;
+
+                          case "text":
+                            elementJsx = (
+                              <div
+                                className={`absolute ${isSelected ? "ring-2 ring-blue-500" : ""}`}
+                                style={{
+                                  left: element.x,
+                                  top: element.y,
+                                  color: element.fill,
+                                  fontFamily: element.fontFamily,
+                                  fontSize: `${element.fontSize}px`,
+                                  fontWeight: element.fontWeight,
+                                  fontStyle: element.fontStyle,
+                                  textDecoration: element.textDecoration,
+                                  opacity: element.opacity * layer.opacity,
+                                  transform: `rotate(${element.rotation}deg)`,
+                                  pointerEvents: layer.locked ? "none" : "auto",
+                                }}
+                                onClick={() =>
+                                  setSelectedElements([element.id])
+                                }
+                              >
+                                {element.text}
+                              </div>
+                            );
+                            break;
+
+                          case "image":
+                            elementJsx = (
+                              <div
+                                className={`absolute ${isSelected ? "ring-2 ring-blue-500" : ""}`}
+                                style={{
+                                  left: element.x,
+                                  top: element.y,
+                                  width: element.width,
+                                  height: element.height,
+                                  opacity: element.opacity * layer.opacity,
+                                  transform: `rotate(${element.rotation}deg)`,
+                                  pointerEvents: layer.locked ? "none" : "auto",
+                                }}
+                                onClick={() =>
+                                  setSelectedElements([element.id])
+                                }
+                              >
+                                <img
+                                  src={element.imageUrl}
+                                  alt=""
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            );
+                            break;
+
+                          default:
+                            elementJsx = null;
+                        }
+
+                        return (
+                          <div key={element.id} className="absolute">
+                            {elementJsx}
+                          </div>
+                        );
+                      });
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1692,7 +1584,7 @@ const GraphicEditor: React.FC<GraphicEditorProps> = () => {
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
-              <Image className="h-16 w-16 mx-auto text-muted-foreground opacity-20" />
+              <Palette className="h-16 w-16 mx-auto text-muted-foreground opacity-20" />
               <h3 className="mt-4 text-lg font-medium">
                 Выберите проект или создайте новый
               </h3>

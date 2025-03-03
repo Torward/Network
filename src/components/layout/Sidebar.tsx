@@ -1,5 +1,5 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   Home,
@@ -15,6 +15,7 @@ import {
   FileText,
   Palette,
 } from "lucide-react";
+import { useAuth } from "../auth/AuthProvider";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -41,6 +42,9 @@ const Sidebar = ({
   newAchievements = 2,
   onNavigate = () => {},
 }: SidebarProps) => {
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
+
   const navItems = [
     {
       id: "home",
@@ -128,6 +132,15 @@ const Sidebar = ({
     },
   ];
 
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      navigate("/login");
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
+
   return (
     <div className="w-[280px] h-full bg-background/80 backdrop-blur-md border-r border-border/50 flex flex-col shadow-md">
       <ScrollArea className="flex-1">
@@ -187,33 +200,64 @@ const Sidebar = ({
           <Separator className="my-4" />
 
           <nav className="space-y-1">
-            {secondaryNavItems.map((item) => (
-              <Link
-                key={item.id}
-                to={item.path}
-                className="block"
-                onClick={() => onNavigate(item.path)}
-              >
-                <motion.div
-                  whileHover={{ x: 5 }}
-                  transition={{ duration: 0.2 }}
-                  className={`flex items-center px-3 py-2 rounded-md ${
-                    activeLink === item.id
-                      ? "bg-gray-100 text-gray-900"
-                      : "text-gray-700 hover:bg-gray-100"
-                  }`}
+            {secondaryNavItems.map((item) =>
+              item.id === "logout" ? (
+                <div
+                  key={item.id}
+                  className="block cursor-pointer"
+                  onClick={handleLogout}
                 >
-                  <span
-                    className={`mr-3 ${
-                      activeLink === item.id ? "text-gray-900" : "text-gray-500"
+                  <motion.div
+                    whileHover={{ x: 5 }}
+                    transition={{ duration: 0.2 }}
+                    className={`flex items-center px-3 py-2 rounded-md ${
+                      activeLink === item.id
+                        ? "bg-gray-100 text-gray-900"
+                        : "text-gray-700 hover:bg-gray-100"
                     }`}
                   >
-                    {item.icon}
-                  </span>
-                  <span className="text-sm font-medium">{item.label}</span>
-                </motion.div>
-              </Link>
-            ))}
+                    <span
+                      className={`mr-3 ${
+                        activeLink === item.id
+                          ? "text-gray-900"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      {item.icon}
+                    </span>
+                    <span className="text-sm font-medium">{item.label}</span>
+                  </motion.div>
+                </div>
+              ) : (
+                <Link
+                  key={item.id}
+                  to={item.path}
+                  className="block"
+                  onClick={() => onNavigate(item.path)}
+                >
+                  <motion.div
+                    whileHover={{ x: 5 }}
+                    transition={{ duration: 0.2 }}
+                    className={`flex items-center px-3 py-2 rounded-md ${
+                      activeLink === item.id
+                        ? "bg-gray-100 text-gray-900"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    <span
+                      className={`mr-3 ${
+                        activeLink === item.id
+                          ? "text-gray-900"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      {item.icon}
+                    </span>
+                    <span className="text-sm font-medium">{item.label}</span>
+                  </motion.div>
+                </Link>
+              ),
+            )}
           </nav>
         </div>
       </ScrollArea>

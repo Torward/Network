@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import * as THREE from "three";
 import { Camera, X, ZoomIn, ZoomOut, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -33,6 +34,11 @@ const ARCamera = ({
   const [zoom, setZoom] = useState([1]);
   const [rotation, setRotation] = useState(0);
   const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [is3DMode, setIs3DMode] = useState(false);
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const frameIdRef = useRef<number | null>(null);
 
   // Check AR support on mount
   useEffect(() => {
@@ -96,6 +102,68 @@ const ARCamera = ({
     setZoom([1]);
     setRotation(0);
   };
+
+  // Initialize 3D scene for AR
+  useEffect(() => {
+    if (!isInitialized || !is3DMode || !containerRef.current) return;
+
+    // Setup Three.js scene
+    const container = containerRef.current;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    // Create scene
+    const scene = new THREE.Scene();
+    sceneRef.current = scene;
+
+    // Create camera
+    const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+    camera.position.z = 5;
+    cameraRef.current = camera;
+
+    // Create renderer
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer.setSize(width, height);
+    renderer.setClearColor(0x000000, 0);
+    container.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
+
+    // Add lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(0, 1, 1);
+    scene.add(directionalLight);
+
+    // Add 3D content (example: a cube)
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+    const cube = new THREE.Mesh(geometry, material);
+    scene.add(cube);
+
+    // Animation loop
+    const animate = () => {
+      cube.rotation.x += 0.01;
+      cube.rotation.y += 0.01;
+      renderer.render(scene, camera);
+      frameIdRef.current = requestAnimationFrame(animate);
+    };
+    animate();
+
+    // Cleanup
+    return () => {
+      if (frameIdRef.current) {
+        cancelAnimationFrame(frameIdRef.current);
+      }
+      if (
+        rendererRef.current &&
+        container.contains(rendererRef.current.domElement)
+      ) {
+        container.removeChild(rendererRef.current.domElement);
+      }
+    };
+  }, [isInitialized, is3DMode]);
 
   return (
     <div className="relative w-full h-full overflow-hidden bg-black">
@@ -175,6 +243,13 @@ const ARCamera = ({
           <div className="flex space-x-2">
             <Button variant="outline" size="icon" onClick={resetView}>
               <RotateCw className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={is3DMode ? "default" : "outline"}
+              size="sm"
+              onClick={() => setIs3DMode(!is3DMode)}
+            >
+              3D Режим
             </Button>
           </div>
         </div>

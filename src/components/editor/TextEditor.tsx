@@ -169,7 +169,7 @@ const TextEditor = () => {
   const [isSpellCheckEnabled, setIsSpellCheckEnabled] = useState(true);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showRuler, setShowRuler] = useState(true);
-  const [pageLayout, setPageLayout] = useState<"web" | "print">("web");
+  const [pageLayout, setPageLayout] = useState<"web" | "print" | "book">("web");
   const [selectedText, setSelectedText] = useState({
     start: 0,
     end: 0,
@@ -241,6 +241,18 @@ const TextEditor = () => {
   const [activeStyleId, setActiveStyleId] = useState("4");
   const [isCollaborationPanelOpen, setIsCollaborationPanelOpen] =
     useState(false);
+
+  // Handle ESC key to exit fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isFullScreen) {
+        setIsFullScreen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isFullScreen]);
 
   // Load documents from localStorage on component mount
   useEffect(() => {
@@ -1140,6 +1152,35 @@ const TextEditor = () => {
                         )}
                       </DropdownMenuItem>
                       <DropdownMenuItem
+                        onClick={() => {
+                          const layouts: ("web" | "print" | "book")[] = [
+                            "web",
+                            "print",
+                            "book",
+                          ];
+                          const currentIndex = layouts.indexOf(pageLayout);
+                          const nextIndex = (currentIndex + 1) % layouts.length;
+                          setPageLayout(layouts[nextIndex]);
+                        }}
+                      >
+                        {pageLayout === "web" ? (
+                          <>
+                            <FileText className="h-4 w-4 mr-2" />
+                            Режим страницы A4
+                          </>
+                        ) : pageLayout === "print" ? (
+                          <>
+                            <FileText className="h-4 w-4 mr-2" />
+                            Книжный разворот
+                          </>
+                        ) : (
+                          <>
+                            <Columns className="h-4 w-4 mr-2" />
+                            Веб-режим
+                          </>
+                        )}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
                         onClick={() => setIsFullScreen(!isFullScreen)}
                       >
                         {isFullScreen ? (
@@ -1166,23 +1207,6 @@ const TextEditor = () => {
                           <>
                             <Eye className="h-4 w-4 mr-2" />
                             Показать линейку
-                          </>
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() =>
-                          setPageLayout(pageLayout === "web" ? "print" : "web")
-                        }
-                      >
-                        {pageLayout === "web" ? (
-                          <>
-                            <FileText className="h-4 w-4 mr-2" />
-                            Режим страницы
-                          </>
-                        ) : (
-                          <>
-                            <Columns className="h-4 w-4 mr-2" />
-                            Веб-режим
                           </>
                         )}
                       </DropdownMenuItem>
@@ -1579,7 +1603,7 @@ const TextEditor = () => {
               {/* Main editor */}
               <div className="flex-1 relative">
                 {/* Ruler (if enabled) */}
-                {showRuler && pageLayout === "print" && (
+                {showRuler && pageLayout !== "web" && (
                   <div className="h-6 border-b border-border flex items-end px-4">
                     <div className="w-full h-4 relative">
                       {Array.from({ length: 10 }).map((_, i) => (
@@ -1598,8 +1622,18 @@ const TextEditor = () => {
                 )}
 
                 <div
-                  className={`flex-1 ${pageLayout === "print" ? "bg-muted/30 p-8" : "p-4"}`}
+                  className={`flex-1 ${pageLayout !== "web" ? "bg-muted/30 p-8" : "p-4"} ${isFullScreen ? "fixed inset-0 z-50 bg-background" : ""}`}
                 >
+                  {isFullScreen && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="absolute top-4 right-4 z-50"
+                      onClick={() => setIsFullScreen(false)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
                   {pageLayout === "print" ? (
                     <div
                       className="mx-auto bg-white shadow-lg p-8 border border-border"
@@ -1629,6 +1663,105 @@ const TextEditor = () => {
                         </div>
                       )}
                     </div>
+                  ) : pageLayout === "book" ? (
+                    <div className="flex justify-center space-x-8">
+                      <div
+                        className="bg-white shadow-lg p-8 border border-border"
+                        style={{
+                          width: "210mm",
+                          minHeight: "297mm",
+                          fontFamily: fontFamily,
+                          fontSize: `${fontSize[0]}pt`,
+                          lineHeight: lineSpacing[0],
+                        }}
+                      >
+                        {viewMode === "edit" ? (
+                          <Textarea
+                            value={content
+                              .split("\n\n")
+                              .filter((_, i) => i % 2 === 0)
+                              .join("\n\n")}
+                            onChange={(e) => {
+                              const leftPages = e.target.value.split("\n\n");
+                              const rightPages = content
+                                .split("\n\n")
+                                .filter((_, i) => i % 2 === 1);
+                              const newContent = leftPages
+                                .flatMap((page, i) => {
+                                  if (i < rightPages.length) {
+                                    return [page, rightPages[i]];
+                                  }
+                                  return [page];
+                                })
+                                .join("\n\n");
+                              setContent(newContent);
+                            }}
+                            onClick={handleTextSelection}
+                            onKeyUp={handleTextSelection}
+                            className="h-full min-h-[280mm] resize-none border-0 p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                            placeholder="Левая страница..."
+                            spellCheck={isSpellCheckEnabled}
+                          />
+                        ) : (
+                          <div className="prose max-w-none">
+                            {content
+                              .split("\n\n")
+                              .filter((_, i) => i % 2 === 0)
+                              .map((paragraph, i) => (
+                                <p key={i}>{paragraph}</p>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                      <div
+                        className="bg-white shadow-lg p-8 border border-border"
+                        style={{
+                          width: "210mm",
+                          minHeight: "297mm",
+                          fontFamily: fontFamily,
+                          fontSize: `${fontSize[0]}pt`,
+                          lineHeight: lineSpacing[0],
+                        }}
+                      >
+                        {viewMode === "edit" ? (
+                          <Textarea
+                            value={content
+                              .split("\n\n")
+                              .filter((_, i) => i % 2 === 1)
+                              .join("\n\n")}
+                            onChange={(e) => {
+                              const rightPages = e.target.value.split("\n\n");
+                              const leftPages = content
+                                .split("\n\n")
+                                .filter((_, i) => i % 2 === 0);
+                              const newContent = leftPages
+                                .flatMap((page, i) => {
+                                  if (i < rightPages.length) {
+                                    return [page, rightPages[i]];
+                                  }
+                                  return [page];
+                                })
+                                .join("\n\n");
+                              setContent(newContent);
+                            }}
+                            onClick={handleTextSelection}
+                            onKeyUp={handleTextSelection}
+                            className="h-full min-h-[280mm] resize-none border-0 p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                            placeholder="Правая страница..."
+                            spellCheck={isSpellCheckEnabled}
+                          />
+                        ) : (
+                          <div className="prose max-w-none">
+                            {content
+                              .split("\n\n")
+                              .filter((_, i) => i % 2 === 1)
+                              .map((paragraph, i) => (
+                                <p key={i}>{paragraph}</p>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   ) : (
                     <div
                       className="h-full"
@@ -1657,6 +1790,25 @@ const TextEditor = () => {
                       )}
                     </div>
                   )}
+
+                  {/* Fullscreen toggle button */}
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="absolute bottom-4 right-4 z-10"
+                    onClick={() => setIsFullScreen(!isFullScreen)}
+                    title={
+                      isFullScreen
+                        ? "Выйти из полноэкранного режима"
+                        : "Полноэкранный режим"
+                    }
+                  >
+                    {isFullScreen ? (
+                      <Minimize2 className="h-4 w-4" />
+                    ) : (
+                      <Maximize2 className="h-4 w-4" />
+                    )}
+                  </Button>
                 </div>
 
                 {/* Add comment dialog */}

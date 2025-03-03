@@ -6,13 +6,12 @@ import {
   Navigate,
   useLocation,
 } from "react-router-dom";
+import AppLayout from "./components/layout/AppLayout";
 import Home from "./components/home";
 import routes from "tempo-routes";
 import { AuthProvider } from "./components/auth/AuthProvider";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import LoginPage from "./components/auth/LoginPage";
-import Header from "./components/layout/Header";
-import Sidebar from "./components/layout/Sidebar";
 
 // Lazy load components for better performance
 const ProfilePage = lazy(() => import("./components/profile/ProfilePage"));
@@ -28,6 +27,7 @@ const MessagesPage = lazy(() => import("./components/messages/MessagesPage"));
 const ARProfileView = lazy(() => import("./components/profile/ARProfileView"));
 const ARView = lazy(() => import("./components/ar/ARView"));
 const SettingsPage = lazy(() => import("./components/settings/SettingsPage"));
+const LocationPage = lazy(() => import("./components/location/LocationPage"));
 
 // Editor components
 const CodeEditor = lazy(() => import("./components/editor/CodeEditor"));
@@ -37,8 +37,6 @@ const GraphicEditor = lazy(() => import("./components/editor/GraphicEditor"));
 // Layout component that conditionally includes sidebar
 const Layout = ({ children }) => {
   const location = useLocation();
-  const [activeLink, setActiveLink] = useState("home");
-  const [sidebarVisible, setSidebarVisible] = useState(true);
 
   // Check if current route is an editor route
   const isEditorRoute = [
@@ -47,58 +45,12 @@ const Layout = ({ children }) => {
     "/graphic-editor",
   ].includes(location.pathname);
 
-  // Update active link based on current path
-  useEffect(() => {
-    const pathToLinkMap = {
-      "/": "home",
-      "/profile": "profile",
-      "/friends": "friends",
-      "/groups": "groups",
-      "/achievements": "achievements",
-      "/messages": "messages",
-      "/ar": "ar",
-      "/settings": "settings",
-      "/code-editor": "code-editor",
-      "/text-editor": "text-editor",
-      "/graphic-editor": "graphic-editor",
-    };
-
-    const link = pathToLinkMap[location.pathname] || "home";
-    setActiveLink(link);
-  }, [location.pathname]);
-
-  const handleMenuToggle = () => {
-    setSidebarVisible(!sidebarVisible);
-  };
-
   // If it's an editor route, don't show the sidebar
   if (isEditorRoute || location.pathname === "/login") {
     return children;
   }
 
-  return (
-    <div className="flex flex-col h-screen bg-background">
-      <Header
-        onMenuToggle={handleMenuToggle}
-        userName="John Doe"
-        userAvatar="https://api.dicebear.com/7.x/avataaars/svg?seed=John"
-        notificationCount={3}
-      />
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar - conditionally shown on mobile */}
-        <div className={`${sidebarVisible ? "block" : "hidden"} md:block`}>
-          <Sidebar
-            activeLink={activeLink}
-            unreadMessages={2}
-            newAchievements={1}
-          />
-        </div>
-
-        {/* Main content */}
-        <main className="flex-1 overflow-auto">{children}</main>
-      </div>
-    </div>
-  );
+  return <AppLayout>{children}</AppLayout>;
 };
 
 function App() {
@@ -202,6 +154,16 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <SettingsPage />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/location"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <LocationPage />
                   </Layout>
                 </ProtectedRoute>
               }

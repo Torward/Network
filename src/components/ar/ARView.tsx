@@ -101,12 +101,74 @@ const ARView = ({
         return (
           <div className="relative bg-white/20 backdrop-blur-md rounded-xl p-4 shadow-lg">
             <div className="relative">
-              <Avatar className="h-40 w-40 border-4 border-white shadow-lg">
-                <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="text-4xl">
-                  {user.name.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
+              {/* 3D Avatar using Three.js */}
+              <div 
+                className="h-40 w-40 border-4 border-white shadow-lg rounded-full overflow-hidden"
+                ref={(el) => {
+                  if (el && !el.hasChildNodes()) {
+                    // Create 3D avatar using Three.js
+                    const scene = new THREE.Scene();
+                    const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+                    const renderer = new THREE.WebGLRenderer({ alpha: true });
+                    renderer.setSize(160, 160);
+                    el.appendChild(renderer.domElement);
+                    
+                    // Add lighting
+                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                    scene.add(ambientLight);
+                    
+                    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                    directionalLight.position.set(0, 1, 1);
+                    scene.add(directionalLight);
+                    
+                    // Create a sphere for the head
+                    const headGeometry = new THREE.SphereGeometry(1, 32, 32);
+                    const headMaterial = new THREE.MeshStandardMaterial({ 
+                      color: 0xf5d0a9,
+                      roughness: 0.7,
+                      metalness: 0.1
+                    });
+                    const head = new THREE.Mesh(headGeometry, headMaterial);
+                    scene.add(head);
+                    
+                    // Add eyes
+                    const eyeGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+                    const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x444444 });
+                    
+                    const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+                    leftEye.position.set(-0.4, 0.2, 0.85);
+                    head.add(leftEye);
+                    
+                    const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+                    rightEye.position.set(0.4, 0.2, 0.85);
+                    head.add(rightEye);
+                    
+                    // Add mouth
+                    const mouthGeometry = new THREE.TorusGeometry(0.3, 0.05, 16, 16, Math.PI);
+                    const mouthMaterial = new THREE.MeshBasicMaterial({ color: 0x333333 });
+                    const mouth = new THREE.Mesh(mouthGeometry, mouthMaterial);
+                    mouth.position.set(0, -0.3, 0.85);
+                    mouth.rotation.x = Math.PI / 2;
+                    mouth.rotation.z = Math.PI;
+                    head.add(mouth);
+                    
+                    // Position camera
+                    camera.position.z = 3;
+                    
+                    // Animation loop
+                    const animate = () => {
+                      requestAnimationFrame(animate);
+                      
+                      // Rotate the head slightly
+                      head.rotation.y += 0.01;
+                      
+                      renderer.render(scene, camera);
+                    };
+                    
+                    animate();
+                  }
+                }}
+              ></div>
 
               {user.zodiacSign && (
                 <div className="absolute -bottom-2 -right-2 z-10">
